@@ -1,0 +1,11 @@
+[package]
+name = "vrp-kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+description = "Dev-only crate for compiling batch 2-opt evaluation PTX kernels via cuda-oxide"
+
+[dependencies]
+# dependencies form cuda-oxide will be added during kernel implementation

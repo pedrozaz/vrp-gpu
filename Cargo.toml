@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+	"crates/vrp-core",
+	"crates/vrp-kernel",
+	"crates/vrp-bench",
+	"crates/vrp-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Guilherme Pedroza"]
+license = "Apache-2.0"
+repository = "https://github.com/pedrozaz/vrp-gpu"
