@@ -1,5 +1,8 @@
 //! Solomon instance data structures and flat Structure-of-Arrays (SoA) layout.
 
+use std::fmt;
+use std::str::FromStr;
+
 /// Configuration and fleet constraints for a Solomon VRP instance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VehicleConfig {
@@ -32,7 +35,7 @@ pub struct SolomonInstance {
     /// Service times at each customer.
     pub service_times: Vec<f32>,
     /// Flattened 1D row-major euclidean distance matrix of size `num_nodes * num_nodes`.
-    /// Distance from node `i` to node `j` is accessed via `distance_matrix[i* num_nodes + j]`.
+    /// Distance from node `i` to node `j` is accessed via `distance_matrix[i * num_nodes + j]`.
     pub distance_matrix: Vec<f32>,
 }
 
@@ -82,13 +85,176 @@ pub fn compute_distance_matrix(xs: &[f32], ys: &[f32]) -> Vec<f32> {
     matrix
 }
 
+/// Errors that can occur during Solomon instance parsing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SolomonParseError {
+    /// Input file or string was empty.
+    EmptyInput,
+    /// Vehicle section header or data was missing or malformed.
+    InvalidVehicleSection(String),
+    /// Customer section header or data row was malformed.
+    InvalidCustomerRow(String),
+    /// No customer/depot nodes found in the instance.
+    NoNodesFound,
+}
+
+impl fmt::Display for SolomonParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyInput => write!(f, "Solomon instance input is empty"),
+            Self::InvalidVehicleSection(msg) => write!(f, "Invalid vehicle section: {msg}"),
+            Self::InvalidCustomerRow(msg) => write!(f, "Invalid customer row: {msg}"),
+            Self::NoNodesFound => write!(f, "Instance does not contain any customer/depot nodes"),
+        }
+    }
+}
+
+impl std::error::Error for SolomonParseError {}
+
+impl FromStr for SolomonInstance {
+    type Err = SolomonParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut name = None;
+        let mut num_vehicles = None;
+        let mut capacity = None;
+
+        let mut in_vehicle_section = false;
+        let mut in_customer_section = false;
+
+        let mut xs = Vec::new();
+        let mut ys = Vec::new();
+        let mut demands = Vec::new();
+        let mut ready_times = Vec::new();
+        let mut due_times = Vec::new();
+        let mut service_times = Vec::new();
+
+        for raw_line in s.lines() {
+            let line = raw_line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            // The first non-empty line before sections is the instance name
+            if name.is_none()
+                && !line.eq_ignore_ascii_case("VEHICLE")
+                && !line.eq_ignore_ascii_case("CUSTOMER")
+            {
+                name = Some(line.to_string());
+                continue;
+            }
+
+            if line.eq_ignore_ascii_case("VEHICLE") {
+                in_vehicle_section = true;
+                in_customer_section = false;
+                continue;
+            }
+
+            if line.eq_ignore_ascii_case("CUSTOMER") {
+                in_vehicle_section = false;
+                in_customer_section = true;
+                continue;
+            }
+
+            if in_vehicle_section {
+                if line.contains("NUMBER") || line.contains("CAPACITY") {
+                    continue;
+                }
+                let tokens: Vec<&str> = line.split_whitespace().collect();
+                if tokens.len() >= 2 && num_vehicles.is_none() {
+                    num_vehicles = Some(tokens[0].parse::<usize>().map_err(|e| {
+                        SolomonParseError::InvalidVehicleSection(format!(
+                            "Invalid vehicle number: {e}"
+                        ))
+                    })?);
+                    capacity = Some(tokens[1].parse::<f32>().map_err(|e| {
+                        SolomonParseError::InvalidVehicleSection(format!("Invalid capacity: {e}"))
+                    })?);
+                }
+                continue;
+            }
+
+            if in_customer_section {
+                if line.contains("CUST") || line.contains("XCOORD") || line.contains("DEMAND") {
+                    continue;
+                }
+
+                let tokens: Vec<&str> = line.split_whitespace().collect();
+                if tokens.len() < 7 {
+                    return Err(SolomonParseError::InvalidCustomerRow(format!(
+                        "Expected 7 columns, found {}: '{}'",
+                        tokens.len(),
+                        line
+                    )));
+                }
+
+                let x = tokens[1].parse::<f32>().map_err(|e| {
+                    SolomonParseError::InvalidCustomerRow(format!("Invalid X coordinate: {e}"))
+                })?;
+                let y = tokens[2].parse::<f32>().map_err(|e| {
+                    SolomonParseError::InvalidCustomerRow(format!("Invalid Y coordinate: {e}"))
+                })?;
+                let demand = tokens[3].parse::<f32>().map_err(|e| {
+                    SolomonParseError::InvalidCustomerRow(format!("Invalid Demand: {e}"))
+                })?;
+                let ready = tokens[4].parse::<f32>().map_err(|e| {
+                    SolomonParseError::InvalidCustomerRow(format!("Invalid Ready time: {e}"))
+                })?;
+                let due = tokens[5].parse::<f32>().map_err(|e| {
+                    SolomonParseError::InvalidCustomerRow(format!("Invalid Due time: {e}"))
+                })?;
+                let service = tokens[6].parse::<f32>().map_err(|e| {
+                    SolomonParseError::InvalidCustomerRow(format!("Invalid Service time: {e}"))
+                })?;
+
+                xs.push(x);
+                ys.push(y);
+                demands.push(demand);
+                ready_times.push(ready);
+                due_times.push(due);
+                service_times.push(service);
+            }
+        }
+
+        let name = name.ok_or(SolomonParseError::EmptyInput)?;
+        let num_vehicles = num_vehicles.ok_or_else(|| {
+            SolomonParseError::InvalidVehicleSection("Vehicle count not found".into())
+        })?;
+        let capacity = capacity.ok_or_else(|| {
+            SolomonParseError::InvalidVehicleSection("Vehicle capacity not found".into())
+        })?;
+
+        let num_nodes = xs.len();
+        if num_nodes == 0 {
+            return Err(SolomonParseError::NoNodesFound);
+        }
+
+        let distance_matrix = compute_distance_matrix(&xs, &ys);
+
+        Ok(Self {
+            name,
+            vehicle: VehicleConfig {
+                num_vehicles,
+                capacity,
+            },
+            num_nodes,
+            xs,
+            ys,
+            demands,
+            ready_times,
+            due_times,
+            service_times,
+            distance_matrix,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_compute_distance_matrix_triangle() {
-        // Triângulo retângulo: (0, 0), (3, 0), (0, 4)
         let xs = vec![0.0, 3.0, 0.0];
         let ys = vec![0.0, 0.0, 4.0];
         let matrix = compute_distance_matrix(&xs, &ys);
@@ -97,20 +263,16 @@ mod tests {
 
         let dist = |i: usize, j: usize| matrix[i * 3 + j];
 
-        // Distância para si mesmo é 0.0
         assert_eq!(dist(0, 0), 0.0);
         assert_eq!(dist(1, 1), 0.0);
         assert_eq!(dist(2, 2), 0.0);
 
-        // Distância 0 <-> 1 é 3.0
         assert_eq!(dist(0, 1), 3.0);
         assert_eq!(dist(1, 0), 3.0);
 
-        // Distância 0 <-> 2 é 4.0
         assert_eq!(dist(0, 2), 4.0);
         assert_eq!(dist(2, 0), 4.0);
 
-        // Distância 1 <-> 2 é 5.0 (Hipotenusa 3-4-5)
         assert_eq!(dist(1, 2), 5.0);
         assert_eq!(dist(2, 1), 5.0);
     }
