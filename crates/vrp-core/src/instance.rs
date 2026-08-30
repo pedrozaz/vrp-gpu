@@ -276,4 +276,86 @@ mod tests {
         assert_eq!(dist(1, 2), 5.0);
         assert_eq!(dist(2, 1), 5.0);
     }
+
+    #[test]
+    fn test_parse_solomon_c101_sample() {
+        let sample = r#"
+C101
+
+VEHICLE
+NUMBER     CAPACITY
+  25          200
+
+CUSTOMER
+CUST NO.  XCOORD.   YCOORD.    DEMAND   READY TIME  DUE DATE   SERVICE TIME
+    0       40.0      50.0       0.0        0.0     1236.0        0.0
+    1       45.0      68.0      10.0      912.0      967.0       90.0
+    2       45.0      70.0      30.0      825.0      870.0       90.0
+"#;
+
+        let instance: SolomonInstance = sample
+            .parse()
+            .expect("failed to parse valid Solomon string");
+
+        assert_eq!(instance.name, "C101");
+        assert_eq!(instance.vehicle.num_vehicles, 25);
+        assert_eq!(instance.vehicle.capacity, 200.0);
+        assert_eq!(instance.num_nodes, 3);
+
+        // Coordenadas SoA
+        assert_eq!(instance.xs, vec![40.0, 45.0, 45.0]);
+        assert_eq!(instance.ys, vec![50.0, 68.0, 70.0]);
+
+        // Demandas
+        assert_eq!(instance.demand(0), 0.0);
+        assert_eq!(instance.demand(1), 10.0);
+        assert_eq!(instance.demand(2), 30.0);
+
+        // Janelas e tempos
+        assert_eq!(instance.ready_times, vec![0.0, 912.0, 825.0]);
+        assert_eq!(instance.due_times, vec![1236.0, 967.0, 870.0]);
+        assert_eq!(instance.service_times, vec![0.0, 90.0, 90.0]);
+
+        // Distância 1 <-> 2: dx = 0, dy = 2 -> dist = 2.0
+        assert_eq!(instance.distance(1, 2), 2.0);
+        assert_eq!(instance.distance(2, 1), 2.0);
+
+        // Distância 0 <-> 1: dx = 5, dy = 18 -> sqrt(25 + 324) = sqrt(349)
+        let expected_dist_0_1 = (5.0f32 * 5.0 + 18.0 * 18.0).sqrt();
+        assert!((instance.distance(0, 1) - expected_dist_0_1).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_parse_solomon_empty_fails() {
+        let result: Result<SolomonInstance, _> = "".parse();
+        assert_eq!(result.unwrap_err(), SolomonParseError::EmptyInput);
+    }
+
+    #[test]
+    fn test_parse_solomon_missing_vehicle_fails() {
+        let sample = "C101\nCUSTOMER\nCUST NO. X Y DEMAND READY DUE SERVICE\n0 0 0 0 0 0 0";
+        let result: Result<SolomonInstance, _> = sample.parse();
+        assert!(matches!(
+            result.unwrap_err(),
+            SolomonParseError::InvalidVehicleSection(_)
+        ));
+    }
+
+    #[test]
+    fn test_parse_solomon_invalid_customer_row_fails() {
+        let sample = r#"
+C101
+VEHICLE
+NUMBER CAPACITY
+25 200
+CUSTOMER
+CUST NO. X Y DEMAND READY DUE SERVICE
+0 0 0
+"#;
+        let result: Result<SolomonInstance, _> = sample.parse();
+        assert!(matches!(
+            result.unwrap_err(),
+            SolomonParseError::InvalidCustomerRow(_)
+        ));
+    }
 }
