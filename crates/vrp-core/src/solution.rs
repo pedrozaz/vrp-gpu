@@ -143,3 +143,143 @@ impl Solution {
         visited[1..].iter().all(|&v| v)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::instance::VehicleConfig;
+
+    fn create_mock_instance() -> SolomonInstance {
+        // Depot (0, 0)
+        // Node 1: (3, 0), demand 10
+        // Node 2: (3, 4), demand 20
+        // Node 3: (0, 4), demand 15
+        // Vehicle: 2 vehicles, capacity 40.0
+        let xs = vec![0.0, 3.0, 3.0, 0.0];
+        let ys = vec![0.0, 0.0, 4.0, 4.0];
+        let demands = vec![0.0, 10.0, 20.0, 15.0];
+        let ready_times = vec![0.0, 0.0, 0.0, 0.0];
+        let due_times = vec![1000.0, 1000.0, 1000.0, 1000.0];
+        let service_times = vec![0.0, 10.0, 10.0, 10.0];
+        let distance_matrix = crate::instance::compute_distance_matrix(&xs, &ys);
+
+        SolomonInstance {
+            name: "MockInstance".into(),
+            vehicle: VehicleConfig {
+                num_vehicles: 2,
+                capacity: 40.0,
+            },
+            num_nodes: 4,
+            xs,
+            ys,
+            demands,
+            ready_times,
+            due_times,
+            service_times,
+            distance_matrix,
+        }
+    }
+
+    #[test]
+    fn test_empty_route_and_solution() {
+        let instance = create_mock_instance();
+        let route = Route::new();
+        assert!(route.is_empty());
+        assert_eq!(route.len(), 0);
+        assert_eq!(route.distance(&instance), 0.0);
+        assert_eq!(route.total_demand(&instance), 0.0);
+        assert!(route.is_capacity_feasible(&instance));
+
+        let solution = Solution::empty();
+        assert_eq!(solution.total_distance(&instance), 0.0);
+        assert_eq!(solution.total_customers_visited(), 0);
+    }
+
+    #[test]
+    fn test_route_distance_and_demand() {
+        let instance = create_mock_instance();
+        // Route: 0 -> 1 -> 2 -> 0
+        // dist(0, 1) = 3.0
+        // dist(1, 2) = 4.0
+        // dist(2, 0) = 5.0 (hypotenuse sqrt(3^2 + 4^2))
+        // total dist = 12.0
+        // total demand = 10 + 20 = 30.0 <= 40.0
+        let route = Route::from_nodes(vec![1, 2]);
+
+        assert_eq!(route.len(), 2);
+        assert!(!route.is_empty());
+        assert_eq!(route.total_demand(&instance), 30.0);
+        assert!(route.is_capacity_feasible(&instance));
+
+        let dist = route.distance(&instance);
+        assert!((dist - 12.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_solution_feasible_valid() {
+        let instance = create_mock_instance();
+        // 2 routes covering all customers 1, 2, 3
+        // Route 1: 0 -> 1 -> 2 -> 0 (demand 30 <= 40)
+        // Route 2: 0 -> 3 -> 0 (demand 15 <= 40)
+        let r1 = Route::from_nodes(vec![1, 2]);
+        let r2 = Route::from_nodes(vec![3]);
+        let solution = Solution::new(vec![r1, r2]);
+
+        assert_eq!(solution.total_customers_visited(), 3);
+        assert!(solution.is_feasible(&instance));
+    }
+
+    #[test]
+    fn test_solution_infeasible_exceeds_capacity() {
+        let instance = create_mock_instance();
+        // Route covering 1, 2, 3: demand = 10 + 20 + 15 = 45 > 40.0 capacity
+        let r = Route::from_nodes(vec![1, 2, 3]);
+        let solution = Solution::new(vec![r]);
+
+        assert!(!solution.is_feasible(&instance));
+    }
+
+    #[test]
+    fn test_solution_infeasible_duplicate_customer() {
+        let instance = create_mock_instance();
+        // Customer 1 visited twice
+        let r1 = Route::from_nodes(vec![1, 2]);
+        let r2 = Route::from_nodes(vec![1, 3]);
+        let solution = Solution::new(vec![r1, r2]);
+
+        assert!(!solution.is_feasible(&instance));
+    }
+
+    #[test]
+    fn test_solution_infeasible_missing_customer() {
+        let instance = create_mock_instance();
+        // Customer 3 missing
+        let r1 = Route::from_nodes(vec![1, 2]);
+        let solution = Solution::new(vec![r1]);
+
+        assert!(!solution.is_feasible(&instance));
+    }
+
+    #[test]
+    fn test_solution_infeasible_too_many_vehicles() {
+        let instance = create_mock_instance();
+        // 3 active routes when max vehicles is 2
+        let r1 = Route::from_nodes(vec![1]);
+        let r2 = Route::from_nodes(vec![2]);
+        let r3 = Route::from_nodes(vec![3]);
+        let solution = Solution::new(vec![r1, r2, r3]);
+
+        assert!(!solution.is_feasible(&instance));
+    }
+
+    #[test]
+    fn test_solution_infeasible_depot_in_route() {
+        let instance = create_mock_instance();
+        // Depot node 0 explicitly included in nodes list
+        let r1 = Route::from_nodes(vec![0, 1, 2]);
+        let r2 = Route::from_nodes(vec![3]);
+        let solution = Solution::new(vec![r1, r2]);
+
+        assert!(!solution.is_feasible(&instance));
+    }
+}
