@@ -13,7 +13,7 @@ compiled with [cuda-oxide](https://github.com/NVLabs/cuda-oxide).
 
 - **GPU**: NVIDIA GPU with Compute Capability `sm_120` or higher (Blackwell consumer architecture).
 - **CPU Fallback**: Full CPU reference implementation available (no NVIDIA GPU required for CPU-only execution).
-- **Operating System**: Linux (developed and verified on Arch Linux with `clang22` and `llvm23`).
+- **Operating System**: Linux (developed and verified on Arch Linux with rustup nightly toolchain).
 - **Rust Toolchain**:
     - Stable edition for published crates (`vrp-core`, `vrp-bench`, `vrp-cli`).
     - Nightly toolchain pinned via `rust-toolchain.toml` specifically for `vrp-kernel` (dev-only).
