@@ -1,11 +1,11 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
 	"crates/vrp-core",
-	"crates/vrp-kernel",
 	"crates/vrp-bench",
 	"crates/vrp-cli",
 ]
+exclude = ["crates/vrp-kernel"]
 
 [workspace.package]
 version = "0.1.0"
