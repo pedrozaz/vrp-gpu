@@ -13,7 +13,8 @@ The project is structured with a strict separation between dev-time and publish-
     - Does **not** require CUDA toolchains or nightly compilers.
 - **Kernel Development (`vrp-kernel`)**:
     - Requires `cuda-oxide` and the pinned Rust nightly toolchain.
-    - Requires `clang22` and `llvm23` installed on the host.
+    - Requires `clang23` and `llvm23` installed on the host.
+    - Uses a standalone workspace so root workspace checks remain stable-only.
 
 ---
 
@@ -50,5 +51,14 @@ cargo fmt --check
 cargo test --workspace
 ```
 
----
+Validate the dev-only kernel workspace separately:
 
+```bash
+cd crates/vrp-kernel
+cargo fmt --check
+cargo check --all-targets
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+---
