@@ -95,3 +95,142 @@ pub fn two_opt(solution: &mut Solution, instance: &SolomonInstance) -> f32 {
         .map(|route| two_opt_route(route, instance))
         .sum()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::instance::{VehicleConfig, compute_distance_matrix};
+
+    const EPSILON: f32 = 1e-5;
+
+    fn create_test_instance() -> SolomonInstance {
+        // Depot: (0, 0)
+        // Customers 1, 2, and 3 form a unit square with the depot.
+        // Customer 4 extends the instance for multi-route tests.
+        let xs = vec![0.0, 0.0, 1.0, 1.0, 2.0];
+        let ys = vec![0.0, 1.0, 0.0, 1.0, 0.0];
+        let demands = vec![0.0, 1.0, 1.0, 1.0, 1.0];
+        let distance_matrix = compute_distance_matrix(&xs, &ys);
+
+        SolomonInstance {
+            name: "TestTwoOpt".into(),
+            vehicle: VehicleConfig {
+                num_vehicles: 2,
+                capacity: 4.0,
+            },
+            num_nodes: xs.len(),
+            xs,
+            ys,
+            demands,
+            ready_times: vec![0.0; 5],
+            due_times: vec![1000.0; 5],
+            service_times: vec![0.0; 5],
+            distance_matrix,
+        }
+    }
+
+    fn assert_approx_eq(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() < EPSILON,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn test_two_opt_delta_matches_recomputed_route_distance() {
+        let instance = create_test_instance();
+        let route = Route::from_nodes(vec![1, 2, 3, 4]);
+        let distance_before = route.distance(&instance);
+
+        for i in 0..route.len() - 1 {
+            for j in i + 1..route.len() {
+                let expected_delta = two_opt_delta(&route, &instance, i, j);
+                let mut swapped = route.clone();
+                apply_two_opt(&mut swapped, i, j);
+                let actual_delta = swapped.distance(&instance) - distance_before;
+
+                assert_approx_eq(actual_delta, expected_delta);
+            }
+        }
+    }
+
+    #[test]
+    fn test_two_opt_delta_for_known_improving_move() {
+        let instance = create_test_instance();
+        let route = Route::from_nodes(vec![1, 2, 3]);
+
+        let delta = two_opt_delta(&route, &instance, 1, 2);
+        let expected = 2.0 - 2.0 * 2.0f32.sqrt();
+
+        assert!(delta < 0.0);
+        assert_approx_eq(delta, expected);
+    }
+
+    #[test]
+    fn test_apply_two_opt_reverses_only_selected_segment() {
+        let mut route = Route::from_nodes(vec![1, 2, 3, 4]);
+
+        apply_two_opt(&mut route, 1, 3);
+
+        assert_eq!(route.nodes, vec![1, 4, 3, 2]);
+    }
+
+    #[test]
+    fn test_two_opt_route_reaches_local_optimum() {
+        let instance = create_test_instance();
+        let mut route = Route::from_nodes(vec![1, 2, 3]);
+        let distance_before = route.distance(&instance);
+
+        let improvement = two_opt_route(&mut route, &instance);
+        let distance_after = route.distance(&instance);
+
+        assert_eq!(route.nodes, vec![1, 3, 2]);
+        assert!(distance_after < distance_before);
+        assert_approx_eq(improvement, distance_before - distance_after);
+
+        for i in 0..route.len() - 1 {
+            for j in i + 1..route.len() {
+                assert!(two_opt_delta(&route, &instance, i, j) >= 0.0);
+            }
+        }
+
+        assert_eq!(two_opt_route(&mut route, &instance), 0.0);
+    }
+
+    #[test]
+    fn test_two_opt_route_leaves_small_routes_unchanged() {
+        let instance = create_test_instance();
+        let routes = [
+            Route::new(),
+            Route::from_nodes(vec![1]),
+            Route::from_nodes(vec![1, 2]),
+        ];
+
+        for original in routes {
+            let mut route = original.clone();
+            let improvement = two_opt_route(&mut route, &instance);
+
+            assert_eq!(route, original);
+            assert_eq!(improvement, 0.0);
+        }
+    }
+
+    #[test]
+    fn test_two_opt_improves_solution_without_changing_feasibility() {
+        let instance = create_test_instance();
+        let mut solution = Solution::new(vec![
+            Route::from_nodes(vec![1, 2, 3]),
+            Route::from_nodes(vec![4]),
+        ]);
+        let distance_before = solution.total_distance(&instance);
+
+        let improvement = two_opt(&mut solution, &instance);
+        let distance_after = solution.total_distance(&instance);
+
+        assert!(solution.is_feasible(&instance));
+        assert_eq!(solution.routes[0].nodes, vec![1, 3, 2]);
+        assert_eq!(solution.routes[1].nodes, vec![4]);
+        assert!(distance_after < distance_before);
+        assert_approx_eq(improvement, distance_before - distance_after);
+    }
+}
