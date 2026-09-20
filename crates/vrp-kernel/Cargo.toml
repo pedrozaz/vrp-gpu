@@ -1,11 +1,15 @@
 [package]
 name = "vrp-kernel"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Guilherme Pedroza"]
+repository = "https://github.com/pedrozaz/vrp-gpu"
 publish = false
 description = "Dev-only crate for compiling batch 2-opt evaluation PTX kernels via cuda-oxide"
 
+[workspace]
+resolver = "3"
+
 [dependencies]
-# dependencies form cuda-oxide will be added during kernel implementation
+# Dependencies from cuda-oxide will be added during kernel implementation.
