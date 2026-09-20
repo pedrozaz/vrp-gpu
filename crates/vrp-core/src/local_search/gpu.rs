@@ -279,6 +279,15 @@ mod tests {
 
     #[test]
     #[ignore = "requires an NVIDIA GPU and CUDA driver"]
+    fn test_singleton_kernel_initializes_invalid_cell() {
+        let instance = create_test_instance();
+        // Exercise the kernel directly; the public API has a CPU fast path.
+        let deltas = launch_two_opt_deltas(&[1], &instance.distance_matrix, 5, 1).unwrap();
+        assert_eq!(deltas, vec![f32::INFINITY]);
+    }
+
+    #[test]
+    #[ignore = "requires an NVIDIA GPU and CUDA driver"]
     fn test_two_opt_deltas_across_blocks_and_scales() {
         // 33² and 65² exercise multiple blocks and a partial final block.
         for route_len in [31, 32, 33, 65] {
