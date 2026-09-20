@@ -40,6 +40,70 @@ pub struct SolomonInstance {
 }
 
 impl SolomonInstance {
+    /// Validates the public arrays and the symmetric CVRP cost model.
+    ///
+    /// Call this after constructing or mutating an instance manually. Validation
+    /// is O(n²), including finite, nonnegative, symmetric distances.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let n = self.num_nodes;
+        if n == 0 {
+            return Err("instance must contain a depot");
+        }
+        if self.vehicle.num_vehicles == 0
+            || !self.vehicle.capacity.is_finite()
+            || self.vehicle.capacity <= 0.0
+        {
+            return Err("fleet size and finite vehicle capacity must be positive");
+        }
+        let arrays = [
+            &self.xs,
+            &self.ys,
+            &self.demands,
+            &self.ready_times,
+            &self.due_times,
+            &self.service_times,
+        ];
+        if arrays.iter().any(|values| values.len() != n) {
+            return Err("node arrays must match num_nodes");
+        }
+        if arrays
+            .iter()
+            .any(|values| values.iter().any(|value| !value.is_finite()))
+        {
+            return Err("node values must be finite");
+        }
+        if self.demands[0] != 0.0 || self.demands.iter().any(|&demand| demand < 0.0) {
+            return Err("demands must be nonnegative and depot demand must be zero");
+        }
+        if self
+            .ready_times
+            .iter()
+            .zip(&self.due_times)
+            .any(|(&ready, &due)| ready < 0.0 || due < ready)
+            || self.service_times.iter().any(|&service| service < 0.0)
+        {
+            return Err("time windows and service times must be nonnegative and ordered");
+        }
+        if n.checked_mul(n) != Some(self.distance_matrix.len()) {
+            return Err("distance matrix must contain num_nodes squared entries");
+        }
+        for i in 0..n {
+            for j in 0..n {
+                let distance = self.distance_matrix[i * n + j];
+                if !distance.is_finite()
+                    || distance < 0.0
+                    || (i == j && distance != 0.0)
+                    || distance != self.distance_matrix[j * n + i]
+                {
+                    return Err(
+                        "distance matrix must be finite, nonnegative, symmetric, with zero diagonal",
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Returns the euclidean distance between node `from` and node `to`.
     #[inline(always)]
     pub fn distance(&self, from: usize, to: usize) -> f32 {
@@ -96,6 +160,8 @@ pub enum SolomonParseError {
     InvalidCustomerRow(String),
     /// No customer/depot nodes found in the instance.
     NoNodesFound,
+    /// Parsed values do not form a valid symmetric CVRP instance.
+    InvalidInstance(String),
 }
 
 impl fmt::Display for SolomonParseError {
@@ -105,6 +171,7 @@ impl fmt::Display for SolomonParseError {
             Self::InvalidVehicleSection(msg) => write!(f, "Invalid vehicle section: {msg}"),
             Self::InvalidCustomerRow(msg) => write!(f, "Invalid customer row: {msg}"),
             Self::NoNodesFound => write!(f, "Instance does not contain any customer/depot nodes"),
+            Self::InvalidInstance(msg) => write!(f, "Invalid instance: {msg}"),
         }
     }
 }
@@ -188,6 +255,15 @@ impl FromStr for SolomonInstance {
                     )));
                 }
 
+                let id = tokens[0].parse::<usize>().map_err(|e| {
+                    SolomonParseError::InvalidCustomerRow(format!("Invalid node ID: {e}"))
+                })?;
+                if id != xs.len() {
+                    return Err(SolomonParseError::InvalidCustomerRow(
+                        "Node IDs must be consecutive from depot 0, in row order".into(),
+                    ));
+                }
+
                 let x = tokens[1].parse::<f32>().map_err(|e| {
                     SolomonParseError::InvalidCustomerRow(format!("Invalid X coordinate: {e}"))
                 })?;
@@ -231,7 +307,7 @@ impl FromStr for SolomonInstance {
 
         let distance_matrix = compute_distance_matrix(&xs, &ys);
 
-        Ok(Self {
+        let instance = Self {
             name,
             vehicle: VehicleConfig {
                 num_vehicles,
@@ -245,13 +321,65 @@ impl FromStr for SolomonInstance {
             due_times,
             service_times,
             distance_matrix,
-        })
+        };
+        instance
+            .validate()
+            .map_err(|message| SolomonParseError::InvalidInstance(message.into()))?;
+        Ok(instance)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parser_rejects_invalid_ids_and_numeric_values() {
+        let prefix = "Test\nVEHICLE\n2 10\nCUSTOMER\n";
+        for row in [
+            "1 0 0 0 0 100 0",
+            "bad 0 0 0 0 100 0",
+            "0 NaN 0 0 0 100 0",
+            "0 inf 0 0 0 100 0",
+            "0 0 0 -1 0 100 0",
+            "0 0 0 1 0 100 0",
+            "0 0 0 0 100 0 0",
+            "0 0 0 0 0 100 -1",
+        ] {
+            assert!(
+                format!("{prefix}{row}").parse::<SolomonInstance>().is_err(),
+                "{row}"
+            );
+        }
+        for id in [0, 2] {
+            let input = format!("{prefix}0 0 0 0 0 100 0\n{id} 1 1 1 0 100 0");
+            assert!(input.parse::<SolomonInstance>().is_err());
+        }
+        for fleet in ["0 10", "1 0", "1 -1", "1 NaN", "1 inf"] {
+            let input = format!("Test\nVEHICLE\n{fleet}\nCUSTOMER\n0 0 0 0 0 100 0");
+            assert!(input.parse::<SolomonInstance>().is_err());
+        }
+    }
+
+    #[test]
+    fn test_validation_rejects_malformed_public_arrays() {
+        let input = "Test\nVEHICLE\n2 10\nCUSTOMER\n0 0 0 0 0 100 0\n1 1 0 1 0 100 0";
+        let original: SolomonInstance = input.parse().unwrap();
+        let mut instance = original.clone();
+        instance.demands.pop();
+        assert!(instance.validate().is_err());
+        instance = original.clone();
+        instance.distance_matrix.pop();
+        assert!(instance.validate().is_err());
+        for value in [f32::NAN, f32::INFINITY, -1.0, 2.0] {
+            instance = original.clone();
+            instance.distance_matrix[1] = value;
+            assert!(instance.validate().is_err());
+        }
+        instance = original;
+        instance.num_nodes = usize::MAX;
+        assert!(instance.validate().is_err());
+    }
 
     #[test]
     fn test_compute_distance_matrix_triangle() {
