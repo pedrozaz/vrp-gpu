@@ -15,4 +15,12 @@ Cargo.lock
 
 # CUDA / PTX
 *.ptx.tmp
-
+/crates/vrp-kernel/*.ptx
+/crates/vrp-kernel/*.ll
+/crates/vrp-kernel/*.ltoir
+/crates/vrp-kernel/*.cubin
+/crates/vrp-kernel/*.cubin.tmp
+/crates/vrp-kernel/*.cubin.identity
+/crates/vrp-kernel/*.ptx.identity
+/crates/vrp-kernel/*.target
+/crates/vrp-kernel/*.options

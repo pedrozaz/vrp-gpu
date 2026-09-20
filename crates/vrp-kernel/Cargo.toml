@@ -12,4 +12,4 @@ description = "Dev-only crate for compiling batch 2-opt evaluation PTX kernels v
 resolver = "3"
 
 [dependencies]
-# Dependencies from cuda-oxide will be added during kernel implementation.
+cuda-device = { git = "https://github.com/NVLabs/cuda-oxide.git", rev = "1c0b81a52ea6af836c10e0f9820302828e1b57bb" }
