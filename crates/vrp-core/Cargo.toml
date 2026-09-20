@@ -7,7 +7,7 @@ authors.workspace = true
 description = "Core data structures, CPU heuristics, and GPU host-orchestration for VRP"
 
 [dependencies]
-cudarc = { version = "0.19.9", optional = true, default-features = false, features = ["std", "driver", "dynamic-loading", "cuda-12000"] }
+cudarc = { version = "0.19.9", optional = true, default-features = false, features = ["std", "driver", "nvrtc", "dynamic-loading", "cuda-12000"] }
 
 [features]
 default = []
