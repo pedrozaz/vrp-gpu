@@ -34,16 +34,16 @@ pub fn two_opt_deltas(
     let candidate = index.get();
     let route_len = route_nodes.len();
 
-    if route_len < 2 {
-        return;
-    }
-
     if let Some(delta) = deltas.get_mut(index) {
+        *delta = f32::INFINITY;
+        if route_len < 2 {
+            return;
+        }
+
         let i = candidate / route_len;
         let j = candidate % route_len;
 
         if i >= route_len || j <= i {
-            *delta = f32::INFINITY;
             return;
         }
 

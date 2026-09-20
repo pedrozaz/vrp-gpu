@@ -12,9 +12,18 @@ use crate::solution::{Route, Solution};
 ///
 /// # Panics
 ///
-/// Panics if the instance contains a customer whose individual demand exceeds
-/// the vehicle capacity (no single vehicle can serve it).
+/// Panics on an invalid instance, an individual demand exceeding capacity, or
+/// when the greedy construction exhausts the fleet. Fleet exhaustion does not
+/// prove that the instance is infeasible: another construction may succeed.
 pub fn nearest_neighbor(instance: &SolomonInstance) -> Solution {
+    instance.validate().expect("invalid CVRP instance");
+    assert!(
+        instance
+            .demands
+            .iter()
+            .all(|&demand| demand <= instance.vehicle.capacity),
+        "customer demand exceeds vehicle capacity"
+    );
     let n = instance.num_nodes;
     if n <= 1 {
         return Solution::empty();
@@ -27,9 +36,13 @@ pub fn nearest_neighbor(instance: &SolomonInstance) -> Solution {
     let mut remaining_customers = n - 1;
 
     while remaining_customers > 0 {
+        assert!(
+            routes.len() < instance.vehicle.num_vehicles,
+            "greedy construction exhausted the vehicle fleet"
+        );
         let mut route_nodes = Vec::new();
         let mut current_node = 0usize;
-        let mut remaining_capacity = instance.vehicle.capacity;
+        let mut route_demand = 0.0f32;
 
         loop {
             // Find the nearest unvisited customer that fits in remaining capacity
@@ -42,7 +55,7 @@ pub fn nearest_neighbor(instance: &SolomonInstance) -> Solution {
                     continue;
                 }
                 let demand = instance.demand(candidate);
-                if demand > remaining_capacity {
+                if route_demand + demand > instance.vehicle.capacity {
                     continue;
                 }
                 let dist = instance.distance(current_node, candidate);
@@ -55,7 +68,7 @@ pub fn nearest_neighbor(instance: &SolomonInstance) -> Solution {
             match best_node {
                 Some(node) => {
                     visited[node] = true;
-                    remaining_capacity -= instance.demand(node);
+                    route_demand += instance.demand(node);
                     route_nodes.push(node);
                     current_node = node;
                     remaining_customers -= 1;
@@ -64,9 +77,11 @@ pub fn nearest_neighbor(instance: &SolomonInstance) -> Solution {
             }
         }
 
-        if !route_nodes.is_empty() {
-            routes.push(Route::from_nodes(route_nodes))
-        }
+        assert!(
+            !route_nodes.is_empty(),
+            "greedy construction made no progress"
+        );
+        routes.push(Route::from_nodes(route_nodes));
     }
 
     Solution::new(routes)
@@ -76,6 +91,38 @@ pub fn nearest_neighbor(instance: &SolomonInstance) -> Solution {
 mod tests {
     use super::*;
     use crate::instance::{VehicleConfig, compute_distance_matrix};
+
+    #[test]
+    #[should_panic(expected = "customer demand exceeds vehicle capacity")]
+    fn test_nearest_neighbor_rejects_oversized_demand() {
+        let mut instance = create_test_instance();
+        instance.demands[1] = instance.vehicle.capacity + 1.0;
+        nearest_neighbor(&instance);
+    }
+
+    #[test]
+    #[should_panic(expected = "exhausted the vehicle fleet")]
+    fn test_nearest_neighbor_rejects_fleet_exhaustion() {
+        let mut instance = create_test_instance();
+        instance.vehicle.num_vehicles = 1;
+        nearest_neighbor(&instance);
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid CVRP instance")]
+    fn test_nearest_neighbor_rejects_nonfinite_demand() {
+        let mut instance = create_test_instance();
+        instance.demands[1] = f32::NAN;
+        nearest_neighbor(&instance);
+    }
+
+    #[test]
+    fn test_nearest_neighbor_capacity_uses_same_sum_as_solution() {
+        let mut instance = create_test_instance();
+        instance.vehicle.capacity = 0.6;
+        instance.demands = vec![0.0, 0.1, 0.2, 0.3, 0.0];
+        assert!(nearest_neighbor(&instance).is_feasible(&instance));
+    }
 
     fn create_test_instance() -> SolomonInstance {
         // Depot at (0, 0)

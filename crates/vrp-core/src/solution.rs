@@ -104,28 +104,20 @@ impl Solution {
     /// 2. Each route respects vehicle capacity constraints (`total_demand <= capacity`).
     /// 3. Every customer node `1..instance.num_nodes` is visited exactly once.
     pub fn is_feasible(&self, instance: &SolomonInstance) -> bool {
-        let active_routes: Vec<&Route> = self.routes.iter().filter(|r| !r.is_empty()).collect();
+        if instance.validate().is_err() {
+            return false;
+        }
+        let active_routes = self.routes.iter().filter(|r| !r.is_empty());
 
         // 1. Fleet size constraint
-        if active_routes.len() > instance.vehicle.num_vehicles {
+        if active_routes.clone().count() > instance.vehicle.num_vehicles {
             return false;
         }
 
-        // 2. Capacity constraint for each route
-        for route in &active_routes {
-            if !route.is_capacity_feasible(instance) {
-                return false;
-            }
-        }
-
         // 3. Customer visitation constraint (each customer 1..num_nodes visited exactly once)
-        if instance.num_nodes <= 1 {
-            return active_routes.is_empty();
-        }
-
         let mut visited = vec![false; instance.num_nodes];
 
-        for route in &active_routes {
+        for route in active_routes {
             for &node in &route.nodes {
                 // Depot cannot be in route.nodes, and node must be within valid range
                 if node == 0 || node >= instance.num_nodes {
@@ -136,6 +128,10 @@ impl Solution {
                     return false;
                 }
                 visited[node] = true;
+            }
+            // Validate IDs before indexing demands in the capacity calculation.
+            if !route.is_capacity_feasible(instance) {
+                return false;
             }
         }
 
@@ -148,6 +144,34 @@ impl Solution {
 mod tests {
     use super::*;
     use crate::instance::VehicleConfig;
+
+    #[test]
+    fn test_solution_rejects_invalid_ids_without_panicking() {
+        let instance = create_mock_instance();
+        for node in [instance.num_nodes, usize::MAX] {
+            let solution = Solution::new(vec![Route::from_nodes(vec![node])]);
+            assert!(!solution.is_feasible(&instance));
+        }
+    }
+
+    #[test]
+    fn test_solution_rejects_malformed_instance() {
+        let mut instance = create_mock_instance();
+        instance.demands.clear();
+        let solution = Solution::new(vec![Route::from_nodes(vec![1, 2, 3])]);
+        assert!(!solution.is_feasible(&instance));
+    }
+
+    #[test]
+    fn test_solution_ignores_empty_routes_in_fleet_count() {
+        let instance = create_mock_instance();
+        let solution = Solution::new(vec![
+            Route::new(),
+            Route::from_nodes(vec![1, 2]),
+            Route::from_nodes(vec![3]),
+        ]);
+        assert!(solution.is_feasible(&instance));
+    }
 
     fn create_mock_instance() -> SolomonInstance {
         // Depot (0, 0)

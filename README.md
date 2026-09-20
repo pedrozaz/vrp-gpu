@@ -6,7 +6,7 @@ compiled with [cuda-oxide](https://github.com/NVLabs/cuda-oxide).
 
 ## Project Status
 
-> **Status**: /! **Experimental / Active Alpha**.
+> **Status**: **Experimental / Active Alpha**.
 > This project is in its early experimental phase. Internal APIs, kernel signatures, and abstractions are subject to breaking changes.
 
 ## System Requirements
@@ -29,15 +29,25 @@ vrp-core = { version = "0.1.0", features = ["gpu"] }
 
 Basic usage example:
 
-```Rust
-use vrp_core::instance::SolomonInstance;
-use vrp_core::local_search::gpu::GpuLocalSearch;
+```rust
+use vrp_core::{
+    instance::SolomonInstance,
+    local_search::gpu::evaluate_two_opt_deltas,
+    solution::Route,
+};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load Solomon instance and run 2-opt local search
-    Ok(())
+fn evaluate_route(
+    input: &str,
+    route_nodes: Vec<usize>,
+) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+    let instance: SolomonInstance = input.parse()?;
+    let route = Route::from_nodes(route_nodes);
+    Ok(evaluate_two_opt_deltas(&route, &instance)?)
 }
 ```
+
+The GPU API returns a row-major `route_len × route_len` matrix. Entries with
+`i < j` contain the 2-opt delta; all other entries are `f32::INFINITY`.
 
 ## Benchmarks
 
@@ -49,5 +59,5 @@ Please review [CONTRIBUTING.md](./CONTRIBUTING.md) for development environment s
 
 ## License
 
-Distribuited under the **Apache-2.0** License. See [LICENSE](./LICENSE) for details
+Distributed under the **Apache-2.0** License. See [LICENSE](./LICENSE) for details.
  
