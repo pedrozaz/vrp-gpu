@@ -1,77 +1,88 @@
 # VRP-GPU
 
-Massively parallel GPU acceleration for Vehicle Routing Problem (VRP) local search in Rust.
-This project evaluates candidate local search moves (such as 2-opt) in batch using custom PTX kernels
-compiled with [cuda-oxide](https://github.com/NVLabs/cuda-oxide).
+[![CI](https://github.com/pedrozaz/vrp-gpu/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/pedrozaz/vrp-gpu/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-## Project Status
+VRP-GPU is an experimental Rust library for vehicle-routing heuristics with an
+optional CUDA execution path. The CPU implementation is the correctness
+reference; versioned PTX kernels accelerate supported local-search operations
+when the `gpu` feature is enabled.
 
-> **Status**: **Experimental / Active Alpha**.
-> This project is in its early experimental phase. Internal APIs, kernel signatures, and abstractions are subject to breaking changes.
+> **Status:** active alpha. The crate has not been published to crates.io yet,
+> and public APIs may change before the first stable release.
 
-## System Requirements
+## Workspace
 
-- **GPU**: NVIDIA GPU with Compute Capability `sm_120` or higher (Blackwell consumer architecture).
-- **CPU Fallback**: Full CPU reference implementation available (no NVIDIA GPU required for CPU-only execution).
-- **Operating System**: Linux (developed and verified on Arch Linux with rustup nightly toolchain).
-- **Rust Toolchain**:
-    - Stable edition for published crates (`vrp-core`, `vrp-bench`, `vrp-cli`).
-    - Nightly toolchain pinned via `rust-toolchain.toml` specifically for `vrp-kernel` (dev-only).
+| Package | Role | Published |
+| --- | --- | --- |
+| `vrp-gpu` | Public library: instances, solutions, CPU heuristics and optional CUDA orchestration | Planned |
+| `vrp-gpu-cli` | Internal command-line frontend | No |
+| `vrp-gpu-bench` | Internal benchmark harness | No |
+| `vrp-gpu-kernel` | Standalone nightly workspace that generates the versioned PTX artifact | No |
 
-## Minimal Installation & Usage
+The kernel package is deliberately excluded from the stable root workspace.
+Users of `vrp-gpu` receive the generated PTX and do not need cuda-oxide, LLVM or
+the pinned nightly compiler.
 
-Add `vrp-core` to your `Cargo.toml`:
+## Using the library before publication
+
+Until the first crates.io release, depend on the repository explicitly:
 
 ```toml
 [dependencies]
-vrp-core = { version = "0.1.0", features = ["gpu"] }
+vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", default-features = false }
 ```
 
-Basic usage example:
+Enable CUDA host orchestration with the opt-in feature:
 
-```rust
-use vrp_core::{
-    instance::SolomonInstance,
-    local_search::gpu::evaluate_two_opt_deltas,
-    solution::Route,
-};
-
-fn evaluate_route(
-    input: &str,
-    route_nodes: Vec<usize>,
-) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
-    let instance: SolomonInstance = input.parse()?;
-    let route = Route::from_nodes(route_nodes);
-    Ok(evaluate_two_opt_deltas(&route, &instance)?)
-}
+```toml
+[dependencies]
+vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", features = ["gpu"] }
 ```
 
-The GPU API returns a row-major `route_len × route_len` matrix. Entries with
-`i < j` contain the 2-opt delta; all other entries are `f32::INFINITY`.
+The default feature set is CPU-only. See the
+[crate-specific README](crates/vrp-gpu/README.md) for a minimal example and the
+public feature contract.
 
-To select just the best improving move, use
-`local_search::gpu::best_two_opt_move(&route, &instance)`. It returns
-`Result<Option<TwoOptMove>, GpuEvaluationError>` without changing the route.
-The GPU reduces finite negative deltas in 256-thread blocks, repeating until
-one candidate remains; only its `f32` delta and `u32` index are downloaded.
-Exact ties select the smallest `(i, j)` in row-major order; `None` means no
-finite negative delta exists. `local_search::cpu::best_two_opt_move` is the
-CPU reference and is available without the `gpu` feature.
+## Compatibility
 
-This API still evaluates one route at a time and retains the full delta matrix
-on the device. Applying moves, iterating to convergence, persistent GPU state,
-and performance benchmarks are separate steps.
-See [the reduction contract and QA commands](docs/2opt-gpu-reduction.md).
+- **Rust:** MSRV 1.88 for the supported feature set; edition 2024.
+- **CPU path:** does not require CUDA or an NVIDIA GPU.
+- **GPU path:** currently developed and hardware-validated on Linux with an
+  NVIDIA GeForce RTX 5060 Ti (`sm_120`). Broader hardware support is not yet
+  claimed.
+- **Kernel development:** uses the toolchain pinned in
+  `crates/vrp-gpu-kernel/rust-toolchain.toml` and the pinned cuda-oxide revision.
 
-## Benchmarks
+## Documentation
 
-Historical benchmark results comparing CPU vs. GPU throughput and solution quality against `vrp-cli` are versioned in [docs/benchmarks](./docs/benchmarks/).
+- [Architecture and publication boundaries](docs/architecture.md)
+- [Deterministic 2-opt reduction](docs/2opt-gpu-reduction.md)
+- [Release and crates.io checklist](docs/releasing.md)
+- [Benchmark record format](docs/benchmarks/README.md)
+- [Changelog](CHANGELOG.md)
 
-## Contributing
+## Development
 
-Please review [CONTRIBUTING.md](./CONTRIBUTING.md) for development environment setup, Git branching strategies, and commit conventions.
+Run the complete stable-workspace quality gate from the repository root:
+
+```sh
+just ci
+```
+
+Kernel validation remains explicit and separate:
+
+```sh
+just kernel-ci
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, commit and pull-request
+workflow.
+
+## Security
+
+Please report vulnerabilities according to [SECURITY.md](SECURITY.md).
 
 ## License
 
-Distributed under the **Apache-2.0** License. See [LICENSE](./LICENSE) for details.
- 
+Licensed under the [Apache License 2.0](LICENSE).
