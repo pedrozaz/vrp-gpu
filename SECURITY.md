@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-VRP-GPU is pre-release software and currently has no published, supported
-version. This section will be updated when the first crates.io release is made.
+During the alpha phase, only the latest published prerelease is eligible for
+best-effort security fixes. Older prereleases are unsupported. If no version
+has been published yet, there is no supported release.
 
 ## Reporting a vulnerability
 

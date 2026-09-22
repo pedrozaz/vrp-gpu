@@ -6,7 +6,8 @@ with a greedy nearest-neighbor heuristic, and improves routes on the CPU.
 The GPU API computes candidate deltas or selects a single move; it does not run
 a complete GPU search loop or mutate a route.
 
-The crate is experimental and has not been published to crates.io yet.
+This is an experimental alpha. Check crates.io for available versions; a
+version in the repository does not mean the package has been published.
 
 ## Features
 
@@ -28,12 +29,12 @@ reproducible application build:
 vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", rev = "<tested-commit>" }
 ```
 
-After an actual crates.io release, use the published version. The following is
-an example of the intended form, not a currently available release:
+Once `0.1.0-alpha.1` is available on crates.io, opt in to that prerelease
+explicitly:
 
 ```toml
 [dependencies]
-vrp-gpu = "0.1"
+vrp-gpu = "0.1.0-alpha.1"
 ```
 
 ## Example
@@ -131,7 +132,9 @@ Each nontrivial GPU call currently creates a CUDA context, loads the embedded
 PTX and transfers the matrix and route. There is no reusable device session or
 GPU convergence loop. The checked-in artifact targets `sm_120` and has been
 hardware-validated on an NVIDIA GeForce RTX 5060 Ti. Other devices have no
-compatibility claim. See the [input and algorithm guide](https://github.com/pedrozaz/vrp-gpu/blob/develop/docs/user-guide.md)
+compatibility claim. The [recorded validation](https://github.com/pedrozaz/vrp-gpu/blob/develop/docs/benchmarks/2026-09-22-cpu-gpu.md)
+found this end-to-end GPU API slower than the CPU reference for all measured
+nontrivial routes; no speedup is claimed. See the [input and algorithm guide](https://github.com/pedrozaz/vrp-gpu/blob/develop/docs/user-guide.md)
 for exact model and numerical contracts.
 
 ## Minimum supported Rust version

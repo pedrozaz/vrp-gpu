@@ -7,6 +7,9 @@ and published versions will follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+The entries below target `0.1.0-alpha.1`; they remain unreleased until the
+package is uploaded and the corresponding Git tag is created.
+
 ### Changed
 
 - Established `vrp-gpu` as the public library identity and namespaced internal
@@ -22,4 +25,4 @@ and published versions will follow [Semantic Versioning](https://semver.org/).
 - Release, architecture and security documentation for future crates.io
   publication.
 
-[Unreleased]: https://github.com/pedrozaz/vrp-gpu/compare/main...develop
+[Unreleased]: https://github.com/pedrozaz/vrp-gpu/commits/develop/
