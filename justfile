@@ -33,6 +33,9 @@ docs:
 # Assemble and verify the future crates.io archive without publishing it
 package:
   cargo package -p vrp-gpu --allow-dirty --locked
+  cargo package -p vrp-gpu --list --allow-dirty --locked | grep -Fxq LICENSE
+  cargo package -p vrp-gpu --list --allow-dirty --locked | grep -Fxq README.md
+  cargo package -p vrp-gpu --list --allow-dirty --locked | grep -Fxq kernel.ptx
 
 # Run dependency and license check via cargo-deny
 deny:
