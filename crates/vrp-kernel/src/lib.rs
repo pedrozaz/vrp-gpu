@@ -2,7 +2,80 @@
 
 //! PTX kernels for batched 2-opt candidate evaluation.
 
-use cuda_device::{DisjointSlice, kernel, thread};
+use cuda_device::{DisjointSlice, SharedArray, kernel, thread};
+
+/// Reduces 256 candidates per block to a (delta, original row-major index) pair.
+///
+/// Launch exactly (256, 1, 1) threads per block in a 1D grid. On the first pass,
+/// route_len > 0 selects valid upper-triangle cells and derives their indices;
+/// on later passes route_len == 0 preserves indices from the preceding pass.
+/// Each output slice must contain at least gridDim.x entries. All input slices
+/// must cover the indicated pass. Input/output allocations must not alias.
+/// Non-finite and nonnegative values reduce to (0.0, u32::MAX).
+#[kernel]
+pub fn reduce_two_opt_candidates(
+    values: &[f32],
+    indices: &[u32],
+    route_len: u32,
+    mut best_values: DisjointSlice<f32>,
+    mut best_indices: DisjointSlice<u32>,
+) {
+    static mut VALUES: SharedArray<f32, 256> = SharedArray::UNINIT;
+    static mut INDICES: SharedArray<u32, 256> = SharedArray::UNINIT;
+    let lane = thread::threadIdx_x() as usize;
+    let block = thread::blockIdx_x() as usize;
+    let offset = block * 256 + lane;
+    let mut value = 0.0f32;
+    let mut original_index = u32::MAX;
+    if offset < values.len() {
+        let candidate = values[offset];
+        let valid_cell = route_len == 0
+            || (offset / (route_len as usize) < offset % (route_len as usize)
+                && offset / (route_len as usize) < route_len as usize);
+        // Comparisons reject NaN, infinities and signed zero without tolerances.
+        if valid_cell && candidate < 0.0 && candidate.is_finite() {
+            value = candidate;
+            original_index = if route_len == 0 {
+                indices[offset]
+            } else {
+                offset as u32
+            };
+        }
+    }
+
+    // SAFETY: each lane initializes its own slot, all 256 lanes participate in
+    // every barrier, and active lanes only read the inactive half at each step.
+    // Raw pointers avoid creating overlapping references to the shared arrays.
+    unsafe {
+        let shared_values = SharedArray::as_raw_mut_ptr(&raw mut VALUES);
+        let shared_indices = SharedArray::as_raw_mut_ptr(&raw mut INDICES);
+        *shared_values.add(lane) = value;
+        *shared_indices.add(lane) = original_index;
+        thread::sync_threads();
+        let mut stride = 128;
+        while stride > 0 {
+            if lane < stride {
+                let other_value = *shared_values.add(lane + stride);
+                let other_index = *shared_indices.add(lane + stride);
+                let current_value = *shared_values.add(lane);
+                let current_index = *shared_indices.add(lane);
+                if other_value < current_value
+                    || (other_value == current_value && other_index < current_index)
+                {
+                    *shared_values.add(lane) = other_value;
+                    *shared_indices.add(lane) = other_index;
+                }
+            }
+            thread::sync_threads();
+            stride /= 2;
+        }
+        if lane == 0 {
+            // Exactly one writer per block and one output slot per block.
+            *best_values.get_unchecked_mut(block) = *shared_values;
+            *best_indices.get_unchecked_mut(block) = *shared_indices;
+        }
+    }
+}
 
 /// Adds one to each element.
 ///
