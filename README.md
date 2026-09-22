@@ -3,10 +3,11 @@
 [![CI](https://github.com/pedrozaz/vrp-gpu/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/pedrozaz/vrp-gpu/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-VRP-GPU is an experimental Rust library for vehicle-routing heuristics with an
-optional CUDA execution path. The CPU implementation is the correctness
-reference; versioned PTX kernels accelerate supported local-search operations
-when the `gpu` feature is enabled.
+VRP-GPU is an experimental Rust library for capacitated vehicle routing (CVRP).
+It parses Solomon-style instances, builds routes with a greedy nearest-neighbor
+heuristic, and provides CPU 2-opt local search. An optional CUDA path evaluates
+2-opt candidates and selects one improving move. The CPU implementation is the
+correctness reference for GPU validation.
 
 > **Status:** active alpha. The crate has not been published to crates.io yet,
 > and public APIs may change before the first stable release.
@@ -42,7 +43,8 @@ vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", features = ["gpu"] }
 
 The default feature set is CPU-only. See the
 [crate-specific README](crates/vrp-gpu/README.md) for a minimal example and the
-public feature contract.
+public feature contract. The current internal CLI prints a placeholder message;
+use the library API for actual routing work.
 
 ## Compatibility
 
@@ -50,14 +52,19 @@ public feature contract.
 - **CPU path:** does not require CUDA or an NVIDIA GPU.
 - **GPU path:** currently developed and hardware-validated on Linux with an
   NVIDIA GeForce RTX 5060 Ti (`sm_120`). Broader hardware support is not yet
-  claimed.
+  claimed. A CUDA driver and a device able to load the checked-in PTX are
+  required at runtime; enabling the Cargo feature alone does not supply them.
 - **Kernel development:** uses the toolchain pinned in
   `crates/vrp-gpu-kernel/rust-toolchain.toml` and the pinned cuda-oxide revision.
 
 ## Documentation
 
+- [Library usage and API contract](crates/vrp-gpu/README.md)
+- [Input model and algorithm semantics](docs/user-guide.md)
 - [Architecture and publication boundaries](docs/architecture.md)
 - [Deterministic 2-opt reduction](docs/2opt-gpu-reduction.md)
+- [Validation matrix and evidence rules](docs/testing.md)
+- [Kernel development and PTX regeneration](docs/kernel-development.md)
 - [Release and crates.io checklist](docs/releasing.md)
 - [Benchmark record format](docs/benchmarks/README.md)
 - [Changelog](CHANGELOG.md)
