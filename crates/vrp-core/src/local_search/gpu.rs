@@ -1,14 +1,23 @@
 //! GPU host-side orchestration using `cudarc` and embedded `kernel.ptx`.
 
+use std::sync::Arc;
+
 use cudarc::{
-    driver::{CudaContext, DriverError, LaunchConfig, PushKernelArg},
+    driver::{CudaContext, CudaSlice, CudaStream, DriverError, LaunchConfig, PushKernelArg},
     nvrtc::Ptx,
 };
 
+use super::TwoOptMove;
 use crate::{instance::SolomonInstance, solution::Route};
 
 const KERNEL_PTX: &str = include_str!("../../kernel.ptx");
 const SMOKE_INPUT: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
+// Must match the shared-array size and reduction tree in the versioned PTX.
+const REDUCTION_THREADS: u32 = 256;
+
+#[cfg(test)]
+#[path = "gpu_reduction_tests.rs"]
+mod reduction_tests;
 
 /// Input validation or CUDA execution failure during delta evaluation.
 #[derive(Debug)]
@@ -99,9 +108,24 @@ pub fn evaluate_two_opt_deltas(
     route: &Route,
     instance: &SolomonInstance,
 ) -> Result<Vec<f32>, GpuEvaluationError> {
+    let (route_nodes, matrix_width, launch_len) = prepare_route(route, instance)?;
+    if route.len() < 2 {
+        return Ok(vec![f32::INFINITY; launch_len as usize]);
+    }
+    Ok(launch_two_opt_deltas(
+        &route_nodes,
+        &instance.distance_matrix,
+        matrix_width,
+        launch_len,
+    )?)
+}
+
+fn prepare_route(
+    route: &Route,
+    instance: &SolomonInstance,
+) -> Result<(Vec<u32>, u32, u32), GpuEvaluationError> {
     let route_len = route.len();
     let launch_len = output_size(route_len)?;
-    let output_len = launch_len as usize;
     let matrix_width =
         u32::try_from(instance.num_nodes).map_err(|_| GpuEvaluationError::SizeOverflow)?;
     instance
@@ -119,16 +143,95 @@ pub fn evaluate_two_opt_deltas(
         route_nodes.push(u32::try_from(node).map_err(|_| GpuEvaluationError::SizeOverflow)?);
     }
 
-    if route_len < 2 {
-        return Ok(vec![f32::INFINITY; output_len]);
-    }
+    Ok((route_nodes, matrix_width, launch_len))
+}
 
-    Ok(launch_two_opt_deltas(
+/// Finds the best finite negative delta on the GPU without changing the route.
+///
+/// Exact ties select the smallest row-major `(i, j)`, matching the CPU oracle.
+/// Returns `None` if no improving candidate exists. Empty and singleton routes
+/// do not access CUDA. Inputs undergo the same validation as delta evaluation.
+/// The n² deltas remain on the device: repeated 256-thread block reductions
+/// transfer only one f32 delta and one u32 original index to the host.
+pub fn best_two_opt_move(
+    route: &Route,
+    instance: &SolomonInstance,
+) -> Result<Option<TwoOptMove>, GpuEvaluationError> {
+    let (route_nodes, matrix_width, launch_len) = prepare_route(route, instance)?;
+    if route.len() < 2 {
+        return Ok(None);
+    }
+    let (stream, deltas) = launch_two_opt_deltas_device(
         &route_nodes,
         &instance.distance_matrix,
         matrix_width,
         launch_len,
-    )?)
+    )?;
+    Ok(reduce_device_deltas(&stream, deltas, route.len() as u32)?)
+}
+
+// Inputs are a nonempty n² delta buffer, n > 0, and n² fits u32. Intermediate
+// indices always refer to the original buffer, never to the preceding pass.
+fn reduce_device_deltas(
+    stream: &Arc<CudaStream>,
+    mut values: CudaSlice<f32>,
+    route_len: u32,
+) -> Result<Option<TwoOptMove>, DriverError> {
+    let module = stream.context().load_module(Ptx::from_src(KERNEL_PTX))?;
+    let function = module.load_function("reduce_two_opt_candidates")?;
+    // The first pass derives indices; a one-element allocation supplies a valid
+    // unused pointer without allocating an n² host or device index vector.
+    let mut indices = stream.alloc_zeros::<u32>(1)?;
+    let mut first_pass_width = route_len;
+    loop {
+        let count = values.len() as u32;
+        let blocks = count.div_ceil(REDUCTION_THREADS);
+        let mut next_values = stream.alloc_zeros::<f32>(blocks as usize)?;
+        let mut next_indices = stream.alloc_zeros::<u32>(blocks as usize)?;
+        let values_len = values.len() as u64;
+        let indices_len = indices.len() as u64;
+        let output_len = u64::from(blocks);
+        let config = LaunchConfig {
+            grid_dim: (blocks, 1, 1),
+            block_dim: (REDUCTION_THREADS, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        let mut args = stream.launch_builder(&function);
+        args.arg(&values)
+            .arg(&values_len)
+            .arg(&indices)
+            .arg(&indices_len)
+            .arg(&first_pass_width)
+            .arg(&mut next_values)
+            .arg(&output_len)
+            .arg(&mut next_indices)
+            .arg(&output_len);
+        // SAFETY: PTX expects four pointer/u64-length pairs and a u32 width in
+        // this order. Exactly 256 lanes participate in every shared-memory
+        // barrier. Each block writes one distinct output slot. Later passes
+        // have one index per value; the first pass never reads indices. Buffers
+        // are disjoint and cudarc tracks their lifetimes on this stream.
+        unsafe {
+            args.launch(config)?;
+        }
+        values = next_values;
+        indices = next_indices;
+        if blocks == 1 {
+            break;
+        }
+        first_pass_width = 0;
+    }
+    stream.synchronize()?;
+    let delta = stream.clone_dtoh(&values)?[0];
+    let index = stream.clone_dtoh(&indices)?[0];
+    if index == u32::MAX {
+        return Ok(None);
+    }
+    Ok(Some(TwoOptMove {
+        i: (index / route_len) as usize,
+        j: (index % route_len) as usize,
+        delta,
+    }))
 }
 
 // Caller validates matrix dimensions, node IDs, and the u32 launch size.
@@ -138,6 +241,17 @@ fn launch_two_opt_deltas(
     matrix_width: u32,
     launch_len: u32,
 ) -> Result<Vec<f32>, DriverError> {
+    let (stream, deltas) =
+        launch_two_opt_deltas_device(route_nodes, distance_matrix, matrix_width, launch_len)?;
+    stream.clone_dtoh(&deltas)
+}
+
+fn launch_two_opt_deltas_device(
+    route_nodes: &[u32],
+    distance_matrix: &[f32],
+    matrix_width: u32,
+    launch_len: u32,
+) -> Result<(Arc<CudaStream>, CudaSlice<f32>), DriverError> {
     let context = CudaContext::new(0)?;
     let stream = context.default_stream();
 
@@ -172,7 +286,7 @@ fn launch_two_opt_deltas(
     }
 
     stream.synchronize()?;
-    stream.clone_dtoh(&deltas_device)
+    Ok((stream, deltas_device))
 }
 
 #[cfg(test)]
