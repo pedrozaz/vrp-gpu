@@ -9,14 +9,15 @@ heuristic, and provides CPU 2-opt local search. An optional CUDA path evaluates
 2-opt candidates and selects one improving move. The CPU implementation is the
 correctness reference for GPU validation.
 
-> **Status:** active alpha. The crate has not been published to crates.io yet,
-> and public APIs may change before the first stable release.
+> **Status:** experimental alpha. Public APIs may change before the first stable
+> release. Check crates.io for published versions; a version in this repository
+> is not evidence that it has been uploaded.
 
 ## Workspace
 
-| Package | Role | Published |
+| Package | Role | Publishable |
 | --- | --- | --- |
-| `vrp-gpu` | Public library: instances, solutions, CPU heuristics and optional CUDA orchestration | Planned |
+| `vrp-gpu` | Public library: instances, solutions, CPU heuristics and optional CUDA orchestration | Yes |
 | `vrp-gpu-cli` | Internal command-line frontend | No |
 | `vrp-gpu-bench` | Internal benchmark harness | No |
 | `vrp-gpu-kernel` | Standalone nightly workspace that generates the versioned PTX artifact | No |
@@ -25,26 +26,39 @@ The kernel package is deliberately excluded from the stable root workspace.
 Users of `vrp-gpu` receive the generated PTX and do not need cuda-oxide, LLVM or
 the pinned nightly compiler.
 
-## Using the library before publication
+## Using the library
 
-Until the first crates.io release, depend on the repository explicitly:
+Once `0.1.0-alpha.1` is published, use its explicit prerelease version:
 
 ```toml
 [dependencies]
-vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", default-features = false }
+vrp-gpu = "0.1.0-alpha.1"
 ```
 
-Enable CUDA host orchestration with the opt-in feature:
+Until then, depend on a tested repository commit explicitly:
 
 ```toml
 [dependencies]
-vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", features = ["gpu"] }
+vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", rev = "<tested-commit>" }
+```
+
+Enable CUDA host orchestration with the opt-in `gpu` feature on either
+dependency source:
+
+```toml
+[dependencies]
+vrp-gpu = { version = "0.1.0-alpha.1", features = ["gpu"] }
 ```
 
 The default feature set is CPU-only. See the
 [crate-specific README](crates/vrp-gpu/README.md) for a minimal example and the
 public feature contract. The current internal CLI prints a placeholder message;
 use the library API for actual routing work.
+
+The CUDA API currently creates a context and transfers data for each nontrivial
+call. In the [recorded CPU/GPU validation](docs/benchmarks/2026-09-22-cpu-gpu.md),
+its end-to-end latency was higher than the CPU reference for every measured
+route with at least two customers. No GPU speedup is claimed for this alpha.
 
 ## Compatibility
 

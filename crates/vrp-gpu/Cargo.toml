@@ -11,7 +11,7 @@ documentation = "https://docs.rs/vrp-gpu"
 readme = "README.md"
 keywords = ["vrp", "cuda", "gpu", "routing", "optimization"]
 categories = ["algorithms", "hardware-support", "science"]
-include = ["/src/**", "/kernel.ptx", "/README.md"]
+include = ["/src/**", "/kernel.ptx", "/README.md", "/LICENSE"]
 
 [lints]
 workspace = true

@@ -80,6 +80,11 @@ jobs:
         run: cargo doc -p vrp-gpu --all-features --no-deps --locked
       - name: Verify crates.io archive
         run: cargo package -p vrp-gpu --locked
+      - name: Verify required archive files
+        run: |
+          cargo package -p vrp-gpu --list --locked | grep -Fxq LICENSE
+          cargo package -p vrp-gpu --list --locked | grep -Fxq README.md
+          cargo package -p vrp-gpu --list --locked | grep -Fxq kernel.ptx
 
   deny:
     name: Cargo Deny (Licenses & Security)
