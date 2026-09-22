@@ -14,3 +14,7 @@ workspace = true
 
 [dependencies]
 vrp-gpu.workspace = true
+
+[features]
+default = []
+gpu = ["vrp-gpu/gpu"]

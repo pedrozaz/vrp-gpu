@@ -16,6 +16,9 @@ and published versions will follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A feature-gated CPU/GPU validation runner with raw latency samples, independent
+  route-cost checks and documented public-API timing boundaries.
+
 - Release, architecture and security documentation for future crates.io
   publication.
 
