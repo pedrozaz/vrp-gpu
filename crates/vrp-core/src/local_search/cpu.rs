@@ -3,8 +3,29 @@
 //! This module is the correctness baseline against which all GPU kernel outputs
 //! must be validated (see §0.5 of the project foundation document).
 
+use super::TwoOptMove;
 use crate::instance::SolomonInstance;
 use crate::solution::{Route, Solution};
+
+/// Finds the best finite improving move without changing the route.
+///
+/// Exact ties select the first `(i, j)` in row-major order. Returns `None` for
+/// routes with fewer than two customers or without a finite negative delta.
+/// Preconditions are the same as for [`two_opt_delta`]: valid customer IDs and
+/// a symmetric distance matrix. This is the CPU oracle for GPU reduction.
+pub fn best_two_opt_move(route: &Route, instance: &SolomonInstance) -> Option<TwoOptMove> {
+    let mut best: Option<TwoOptMove> = None;
+    for i in 0..route.len() {
+        for j in i + 1..route.len() {
+            let delta = two_opt_delta(route, instance, i, j);
+            if delta.is_finite() && delta < 0.0 && best.is_none_or(|current| delta < current.delta)
+            {
+                best = Some(TwoOptMove { i, j, delta });
+            }
+        }
+    }
+    best
+}
 
 /// Calculates the cost delta of a 2-opt swap on a single route.
 ///
@@ -102,6 +123,57 @@ mod tests {
     use crate::instance::{VehicleConfig, compute_distance_matrix};
 
     const EPSILON: f32 = 1e-5;
+
+    #[test]
+    fn test_best_move_handles_small_and_optimal_routes() {
+        let instance = create_test_instance();
+        for nodes in [vec![], vec![1], vec![1, 2], vec![1, 3, 2]] {
+            assert_eq!(
+                best_two_opt_move(&Route::from_nodes(nodes), &instance),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn test_best_move_breaks_ties_in_row_major_order_without_mutation() {
+        let mut instance = create_test_instance();
+        let n = instance.num_nodes;
+        for i in 0..n {
+            for j in 0..n {
+                instance.distance_matrix[i * n + j] = if i == j { 0.0 } else { 2.0 };
+            }
+        }
+        for (i, j) in [(0, 2), (2, 0), (1, 3), (3, 1)] {
+            instance.distance_matrix[i * n + j] = 1.0;
+        }
+        let route = Route::from_nodes(vec![1, 2, 3]);
+        let original = route.clone();
+        // Reversing either of these segments removes the crossing diagonals.
+        assert_eq!(
+            two_opt_delta(&route, &instance, 0, 1),
+            two_opt_delta(&route, &instance, 1, 2)
+        );
+        let best = best_two_opt_move(&route, &instance).unwrap();
+        assert_eq!((best.i, best.j), (0, 1));
+        assert_eq!(route, original);
+        let mut improved = route.clone();
+        apply_two_opt(&mut improved, best.i, best.j);
+        assert_approx_eq(
+            improved.distance(&instance) - route.distance(&instance),
+            best.delta,
+        );
+    }
+
+    #[test]
+    fn test_best_move_ignores_nonfinite_deltas() {
+        let mut instance = create_test_instance();
+        let route = Route::from_nodes(vec![1, 2, 3]);
+        instance.distance_matrix.fill(f32::INFINITY);
+        assert_eq!(best_two_opt_move(&route, &instance), None);
+        instance.distance_matrix.fill(f32::NAN);
+        assert_eq!(best_two_opt_move(&route, &instance), None);
+    }
 
     fn create_test_instance() -> SolomonInstance {
         // Depot: (0, 0)
