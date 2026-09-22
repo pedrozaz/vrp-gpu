@@ -7,22 +7,29 @@ and published versions will follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-The entries below target `0.1.0-alpha.1`; they remain unreleased until the
-package is uploaded and the corresponding Git tag is created.
+## [0.1.0-alpha.1] - 2026-09-22
 
-### Changed
-
-- Established `vrp-gpu` as the public library identity and namespaced internal
-  workspace packages.
-- Added publication metadata, package-content checks and an explicit MSRV.
-- Separated user-facing crate documentation from workspace contributor docs.
+First public alpha release of the `vrp-gpu` library. The CLI, benchmark harness,
+and kernel compiler workspace are not published.
 
 ### Added
 
-- A feature-gated CPU/GPU validation runner with raw latency samples, independent
-  route-cost checks and documented public-API timing boundaries.
+- Solomon-style instance parsing, CVRP route and solution types, greedy
+  nearest-neighbor construction, and CPU 2-opt local search.
+- An opt-in `gpu` feature for CUDA 2-opt delta evaluation and deterministic
+  best-move selection, with the versioned `sm_120` PTX embedded in the crate.
+- CPU/GPU correctness and latency validation records, plus public API,
+  contributor, kernel, security, and release documentation.
 
-- Release, architecture and security documentation for future crates.io
-  publication.
+### Known limitations
 
-[Unreleased]: https://github.com/pedrozaz/vrp-gpu/commits/develop/
+- The GPU path is validated only on the NVIDIA GeForce RTX 5060 Ti (`sm_120`);
+  no compatibility claim is made for other devices.
+- The GPU API evaluates one batch and does not run a solver to convergence.
+  Its end-to-end latency was higher than the CPU reference in the recorded
+  validation cases with at least two customers.
+- The supported input model is CVRP; Solomon time windows are parsed but not
+  enforced by the current construction or local-search routines.
+
+[Unreleased]: https://github.com/pedrozaz/vrp-gpu/compare/v0.1.0-alpha.1...develop
+[0.1.0-alpha.1]: https://github.com/pedrozaz/vrp-gpu/releases/tag/v0.1.0-alpha.1
