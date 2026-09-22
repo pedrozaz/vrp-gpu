@@ -1,5 +1,5 @@
 [package]
-name = "vrp-kernel"
+name = "vrp-gpu-kernel"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"

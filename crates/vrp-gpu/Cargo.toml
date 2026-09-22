@@ -1,0 +1,28 @@
+[package]
+name = "vrp-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "CPU reference heuristics and optional CUDA acceleration for vehicle routing problems"
+documentation = "https://docs.rs/vrp-gpu"
+readme = "README.md"
+keywords = ["vrp", "cuda", "gpu", "routing", "optimization"]
+categories = ["algorithms", "hardware-support", "science"]
+include = ["/src/**", "/kernel.ptx", "/README.md"]
+
+[lints]
+workspace = true
+
+[dependencies]
+cudarc = { version = "0.19.9", optional = true, default-features = false, features = ["std", "driver", "nvrtc", "dynamic-loading", "cuda-12000"] }
+
+[features]
+default = []
+gpu = ["dep:cudarc"]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
