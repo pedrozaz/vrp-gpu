@@ -1,7 +1,6 @@
 # Rust / Cargo
 target/
 **/*.rs.bk
-Cargo.lock
 
 # IDE
 .idea/
@@ -15,12 +14,12 @@ Cargo.lock
 
 # CUDA / PTX
 *.ptx.tmp
-/crates/vrp-kernel/*.ptx
-/crates/vrp-kernel/*.ll
-/crates/vrp-kernel/*.ltoir
-/crates/vrp-kernel/*.cubin
-/crates/vrp-kernel/*.cubin.tmp
-/crates/vrp-kernel/*.cubin.identity
-/crates/vrp-kernel/*.ptx.identity
-/crates/vrp-kernel/*.target
-/crates/vrp-kernel/*.options
+/crates/vrp-gpu-kernel/*.ptx
+/crates/vrp-gpu-kernel/*.ll
+/crates/vrp-gpu-kernel/*.ltoir
+/crates/vrp-gpu-kernel/*.cubin
+/crates/vrp-gpu-kernel/*.cubin.tmp
+/crates/vrp-gpu-kernel/*.cubin.identity
+/crates/vrp-gpu-kernel/*.ptx.identity
+/crates/vrp-gpu-kernel/*.target
+/crates/vrp-gpu-kernel/*.options

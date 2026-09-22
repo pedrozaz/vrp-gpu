@@ -22,8 +22,11 @@ mod reduction_tests;
 /// Input validation or CUDA execution failure during delta evaluation.
 #[derive(Debug)]
 pub enum GpuEvaluationError {
+    /// The instance or route violates the evaluator's input invariants.
     InvalidInput(&'static str),
+    /// A matrix or launch dimension cannot be represented safely.
     SizeOverflow,
+    /// The CUDA driver rejected an operation.
     Driver(DriverError),
 }
 

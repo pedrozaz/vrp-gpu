@@ -44,8 +44,8 @@ From the repository root:
 ```sh
 just ci
 cargo test --workspace --no-default-features
-cargo test -p vrp-core --features gpu -- --ignored
-cargo test -p vrp-core --features gpu --release -- --include-ignored
+cargo test -p vrp-gpu --features gpu -- --ignored
+cargo test -p vrp-gpu --features gpu --release -- --include-ignored
 ```
 
 The synthetic reduction tests compare with an independent sorted CPU oracle.
@@ -58,7 +58,7 @@ oracle and checking the selected reversal by recomputing total route cost in f64
 GPU delta comparisons use `1e-5 * max(1, abs(expected))`; synthetic values and
 tie indices are checked exactly. Input rejection and small routes run in CPU CI.
 
-Build the test executable with `cargo test -p vrp-core --features gpu --no-run`.
+Build the test executable with `cargo test -p vrp-gpu --features gpu --no-run`.
 Use the executable path reported by Cargo for each sanitizer command:
 
 ```sh
@@ -71,11 +71,11 @@ compute-sanitizer --tool initcheck --error-exitcode 1 <test-executable> reductio
 The kernel workspace has its own checks and regeneration command:
 
 ```sh
-cd crates/vrp-kernel
+cd crates/vrp-gpu-kernel
 cargo fmt --check
 cargo check --all-targets
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo oxide inspect --arch sm_120
-cmp vrp_kernel.ptx ../vrp-core/kernel.ptx
+cmp vrp_gpu_kernel.ptx ../vrp-gpu/kernel.ptx
 ```

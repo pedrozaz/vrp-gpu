@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -50,9 +53,33 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run tests (no default features)
-        run: cargo test --workspace --no-default-features
+        run: cargo test --workspace --no-default-features --locked
       - name: Run tests (all features)
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --all-features --locked
+
+  msrv:
+    name: Minimum Rust 1.88
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Check public crate on its MSRV
+        run: cargo check -p vrp-gpu --all-features --locked
+
+  package:
+    name: Documentation and Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build public API documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc -p vrp-gpu --all-features --no-deps --locked
+      - name: Verify crates.io archive
+        run: cargo package -p vrp-gpu --locked
 
   deny:
     name: Cargo Deny (Licenses & Security)
