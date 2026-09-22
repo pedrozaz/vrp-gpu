@@ -149,7 +149,7 @@ mod tests {
         }
         let route = Route::from_nodes(vec![1, 2, 3]);
         let original = route.clone();
-        // Reversing either of these segments removes the crossing diagonals.
+        // Both reversals replace two cost-2 edges with two cost-1 edges.
         assert_eq!(
             two_opt_delta(&route, &instance, 0, 1),
             two_opt_delta(&route, &instance, 1, 2)
@@ -173,6 +173,53 @@ mod tests {
         assert_eq!(best_two_opt_move(&route, &instance), None);
         instance.distance_matrix.fill(f32::NAN);
         assert_eq!(best_two_opt_move(&route, &instance), None);
+    }
+
+    #[test]
+    fn test_best_move_matches_full_cost_enumeration_for_all_permutations() {
+        let mut instance = create_test_instance();
+        let n = instance.num_nodes;
+        // Integer distances make the independent total-cost oracle exact.
+        for i in 0..n {
+            for j in 0..n {
+                instance.distance_matrix[i * n + j] = i.abs_diff(j) as f32;
+            }
+        }
+        for a in 1..n {
+            for b in 1..n {
+                for c in 1..n {
+                    for d in 1..n {
+                        let mut unique = vec![a, b, c, d];
+                        unique.sort_unstable();
+                        unique.dedup();
+                        if unique.len() != 4 {
+                            continue;
+                        }
+                        let route = Route::from_nodes(vec![a, b, c, d]);
+                        let before = route.distance(&instance);
+                        let mut moves = Vec::new();
+                        for i in 0..route.len() {
+                            for j in i + 1..route.len() {
+                                let mut reversed = route.clone();
+                                reversed.nodes[i..=j].reverse();
+                                let delta = reversed.distance(&instance) - before;
+                                if delta < 0.0 {
+                                    moves.push(TwoOptMove { i, j, delta });
+                                }
+                            }
+                        }
+                        moves.sort_by(|a, b| {
+                            a.delta
+                                .partial_cmp(&b.delta)
+                                .unwrap()
+                                .then(a.i.cmp(&b.i))
+                                .then(a.j.cmp(&b.j))
+                        });
+                        assert_eq!(best_two_opt_move(&route, &instance), moves.first().copied());
+                    }
+                }
+            }
+        }
     }
 
     fn create_test_instance() -> SolomonInstance {
