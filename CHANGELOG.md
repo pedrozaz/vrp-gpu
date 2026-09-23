@@ -7,6 +7,18 @@ and published versions will follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1-alpha] - 2026-09-22
+
+Documentation-only prerelease. No Rust API, algorithm, dependency, or PTX
+behavior changed from `0.1.0-alpha.1`.
+
+### Changed
+
+- Updated the packaged README and installation examples to describe an alpha
+  that is available on crates.io rather than a future publication.
+- Clarified the package description to distinguish optional CUDA move
+  evaluation from a claimed end-to-end GPU speedup.
+
 ## [0.1.0-alpha.1] - 2026-09-22
 
 First public alpha release of the `vrp-gpu` library. The CLI, benchmark harness,
@@ -31,5 +43,6 @@ and kernel compiler workspace are not published.
 - The supported input model is CVRP; Solomon time windows are parsed but not
   enforced by the current construction or local-search routines.
 
-[Unreleased]: https://github.com/pedrozaz/vrp-gpu/compare/v0.1.0-alpha.1...develop
+[Unreleased]: https://github.com/pedrozaz/vrp-gpu/compare/v0.1.1-alpha...develop
+[0.1.1-alpha]: https://github.com/pedrozaz/vrp-gpu/compare/v0.1.0-alpha.1...v0.1.1-alpha
 [0.1.0-alpha.1]: https://github.com/pedrozaz/vrp-gpu/releases/tag/v0.1.0-alpha.1

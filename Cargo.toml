@@ -8,7 +8,7 @@ members = [
 exclude = ["crates/vrp-gpu-kernel"]
 
 [workspace.package]
-version = "0.1.0-alpha.1"
+version = "0.1.1-alpha"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Guilherme Pedroza"]
@@ -16,7 +16,7 @@ license = "Apache-2.0"
 repository = "https://github.com/pedrozaz/vrp-gpu"
 
 [workspace.dependencies]
-vrp-gpu = { version = "0.1.0-alpha.1", path = "crates/vrp-gpu" }
+vrp-gpu = { version = "0.1.1-alpha", path = "crates/vrp-gpu" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

@@ -29,21 +29,21 @@ dependencies = [
 
 [[package]]
 name = "vrp-gpu"
-version = "0.1.0-alpha.1"
+version = "0.1.1-alpha"
 dependencies = [
  "cudarc",
 ]
 
 [[package]]
 name = "vrp-gpu-bench"
-version = "0.1.0-alpha.1"
+version = "0.1.1-alpha"
 dependencies = [
  "vrp-gpu",
 ]
 
 [[package]]
 name = "vrp-gpu-cli"
-version = "0.1.0-alpha.1"
+version = "0.1.1-alpha"
 dependencies = [
  "vrp-gpu",
 ]

@@ -1,14 +1,13 @@
 # Release and crates.io checklist
 
-The first planned release is `0.1.0-alpha.1`. These steps prepare and verify a
-release; they do not replace a maintainer's final review of the archive or
-authorize an upload. Only the library package `vrp-gpu` is publishable.
+These steps prepare and verify a release; they do not replace a maintainer's
+final review of the archive or authorize an upload. Only the library package
+`vrp-gpu` is publishable.
 
 ## 1. Stabilize the release
 
-1. Create `release/vX.Y.Z[-prerelease]` from an up-to-date `develop` after the
-   readiness pull request has merged. The first target is
-   `release/v0.1.0-alpha.1`.
+1. Create `release/vX.Y.Z[-prerelease]` from an up-to-date `develop`. Merge the
+   reviewed release branch into `main` through a non-fast-forward pull request.
 2. Confirm the intended version in `workspace.package.version`, the internal
    workspace dependency version and `Cargo.lock` agree. Change all three if
    the release target changes.
@@ -18,18 +17,16 @@ authorize an upload. Only the library package `vrp-gpu` is publishable.
 4. Confirm that README examples, feature descriptions and the MSRV are current.
 5. Confirm that only `vrp-gpu` is publishable.
 
-Crate names are allocated first-come, first-served. Recheck the intended name
-immediately before the first publication:
+Confirm that the exact target version has not already been published:
 
 ```sh
-cargo search vrp-gpu --limit 10
-(cd /tmp && cargo info vrp-gpu --registry crates-io)
+(cd /tmp && cargo info vrp-gpu@VERSION --registry crates-io)
 ```
 
-Run `cargo info` outside this workspace: inside it, Cargo can resolve the
-local package instead of the registry entry. Search results are not proof that
-a name is free; the registry is authoritative when publishing. If the name is
-already taken, stop and resolve the identity before changing release metadata.
+Replace the placeholder with the intended exact version. Run `cargo info`
+outside this workspace: inside it, Cargo can resolve the local package instead
+of the registry entry. If the version is already present, stop; a published
+version cannot be overwritten.
 
 ## 2. Validate the source tree
 
@@ -70,11 +67,9 @@ archive path, including any `-alpha.N` suffix. The dry run does not publish.
 
 ## 4. Publish deliberately
 
-After the release pull request is approved and merged according to the branch
-policy, obtain explicit maintainer approval for the irreversible upload. For
-the **first** release, `main` does not exist yet: create it from the reviewed
-release commit and verify it points at exactly the source tree validated above.
-For subsequent releases, merge the release branch into `main` through a PR.
+After the release pull request is approved and merged into `main`, obtain
+explicit maintainer approval for the irreversible upload. Verify that `main`
+points at exactly the source tree validated above.
 Do not create a release tag for a tree different from the uploaded package.
 Configure registry authentication through Cargo's supported login mechanism;
 do not paste a token into a shell command or commit it. Then run:

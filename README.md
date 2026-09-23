@@ -9,9 +9,9 @@ heuristic, and provides CPU 2-opt local search. The optional `gpu` feature uses
 CUDA to evaluate 2-opt candidates and select one improving move; it is not a
 complete GPU solver. The CPU implementation is the correctness reference.
 
-> **Published alpha:** [`vrp-gpu 0.1.0-alpha.1`](https://crates.io/crates/vrp-gpu/0.1.0-alpha.1).
+> **Published alpha:** [`vrp-gpu 0.1.1-alpha`](https://crates.io/crates/vrp-gpu/0.1.1-alpha).
 > Public APIs may change before the first stable release. See the
-> [API documentation](https://docs.rs/vrp-gpu/0.1.0-alpha.1/vrp_gpu/) for this
+> [API documentation](https://docs.rs/vrp-gpu/0.1.1-alpha/vrp_gpu/) for this
 > published version.
 
 ## Workspace
@@ -33,7 +33,7 @@ To use the published alpha, specify its prerelease version:
 
 ```toml
 [dependencies]
-vrp-gpu = "0.1.0-alpha.1"
+vrp-gpu = "0.1.1-alpha"
 ```
 
 To try changes that have not been published, pin a tested repository commit:
@@ -47,7 +47,7 @@ Enable CUDA candidate evaluation with the opt-in `gpu` feature:
 
 ```toml
 [dependencies]
-vrp-gpu = { version = "0.1.0-alpha.1", features = ["gpu"] }
+vrp-gpu = { version = "0.1.1-alpha", features = ["gpu"] }
 ```
 
 The default feature set is CPU-only. See the
