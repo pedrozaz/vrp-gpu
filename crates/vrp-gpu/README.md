@@ -6,10 +6,10 @@ with a greedy nearest-neighbor heuristic, and improves routes on the CPU.
 The GPU API computes candidate deltas or selects a single move; it does not run
 a complete GPU search loop or mutate a route.
 
-The first published alpha is
-[`0.1.0-alpha.1`](https://crates.io/crates/vrp-gpu/0.1.0-alpha.1).
+The current alpha is
+[`0.1.1-alpha`](https://crates.io/crates/vrp-gpu/0.1.1-alpha).
 The API may change before a stable release. See the
-[documentation for that version](https://docs.rs/vrp-gpu/0.1.0-alpha.1/vrp_gpu/).
+[documentation for that version](https://docs.rs/vrp-gpu/0.1.1-alpha/vrp_gpu/).
 
 ## Features
 
@@ -27,7 +27,7 @@ To use the published alpha, specify its prerelease version:
 
 ```toml
 [dependencies]
-vrp-gpu = "0.1.0-alpha.1"
+vrp-gpu = "0.1.1-alpha"
 ```
 
 For changes not yet published, pin a tested Git revision:
@@ -80,7 +80,7 @@ To use the optional GPU API in the published alpha, enable the feature:
 
 ```toml
 [dependencies]
-vrp-gpu = { version = "0.1.0-alpha.1", features = ["gpu"] }
+vrp-gpu = { version = "0.1.1-alpha", features = ["gpu"] }
 ```
 
 `gpu::evaluate_two_opt_deltas` returns a row-major `n × n` matrix with computed
