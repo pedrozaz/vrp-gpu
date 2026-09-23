@@ -5,13 +5,14 @@
 
 VRP-GPU is an experimental Rust library for capacitated vehicle routing (CVRP).
 It parses Solomon-style instances, builds routes with a greedy nearest-neighbor
-heuristic, and provides CPU 2-opt local search. An optional CUDA path evaluates
-2-opt candidates and selects one improving move. The CPU implementation is the
-correctness reference for GPU validation.
+heuristic, and provides CPU 2-opt local search. The optional `gpu` feature uses
+CUDA to evaluate 2-opt candidates and select one improving move; it is not a
+complete GPU solver. The CPU implementation is the correctness reference.
 
-> **Status:** experimental alpha. Public APIs may change before the first stable
-> release. Check crates.io for published versions; a version in this repository
-> is not evidence that it has been uploaded.
+> **Published alpha:** [`vrp-gpu 0.1.1-alpha`](https://crates.io/crates/vrp-gpu/0.1.1-alpha).
+> Public APIs may change before the first stable release. See the
+> [API documentation](https://docs.rs/vrp-gpu/0.1.1-alpha/vrp_gpu/) for this
+> published version.
 
 ## Workspace
 
@@ -28,26 +29,25 @@ the pinned nightly compiler.
 
 ## Using the library
 
-Once `0.1.0-alpha.1` is published, use its explicit prerelease version:
+To use the published alpha, specify its prerelease version:
 
 ```toml
 [dependencies]
-vrp-gpu = "0.1.0-alpha.1"
+vrp-gpu = "0.1.1-alpha"
 ```
 
-Until then, depend on a tested repository commit explicitly:
+To try changes that have not been published, pin a tested repository commit:
 
 ```toml
 [dependencies]
 vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", rev = "<tested-commit>" }
 ```
 
-Enable CUDA host orchestration with the opt-in `gpu` feature on either
-dependency source:
+Enable CUDA candidate evaluation with the opt-in `gpu` feature:
 
 ```toml
 [dependencies]
-vrp-gpu = { version = "0.1.0-alpha.1", features = ["gpu"] }
+vrp-gpu = { version = "0.1.1-alpha", features = ["gpu"] }
 ```
 
 The default feature set is CPU-only. See the

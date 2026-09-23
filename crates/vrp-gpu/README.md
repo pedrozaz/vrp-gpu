@@ -6,8 +6,10 @@ with a greedy nearest-neighbor heuristic, and improves routes on the CPU.
 The GPU API computes candidate deltas or selects a single move; it does not run
 a complete GPU search loop or mutate a route.
 
-This is an experimental alpha. Check crates.io for available versions; a
-version in the repository does not mean the package has been published.
+The current alpha is
+[`0.1.1-alpha`](https://crates.io/crates/vrp-gpu/0.1.1-alpha).
+The API may change before a stable release. See the
+[documentation for that version](https://docs.rs/vrp-gpu/0.1.1-alpha/vrp_gpu/).
 
 ## Features
 
@@ -21,20 +23,18 @@ PTX is precompiled; consumers do not need cuda-oxide or a nightly Rust compiler.
 
 ## Installation
 
-Before publication, use the Git repository and pin a tested revision for a
-reproducible application build:
+To use the published alpha, specify its prerelease version:
+
+```toml
+[dependencies]
+vrp-gpu = "0.1.1-alpha"
+```
+
+For changes not yet published, pin a tested Git revision:
 
 ```toml
 [dependencies]
 vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", rev = "<tested-commit>" }
-```
-
-Once `0.1.0-alpha.1` is available on crates.io, opt in to that prerelease
-explicitly:
-
-```toml
-[dependencies]
-vrp-gpu = "0.1.0-alpha.1"
 ```
 
 ## Example
@@ -76,14 +76,13 @@ exhaustion only means this greedy construction failed. If instance data are
 constructed or changed through public fields, call `SolomonInstance::validate`
 before passing them to CPU routines.
 
-To use the optional GPU API, enable the feature in the dependency:
+To use the optional GPU API in the published alpha, enable the feature:
 
 ```toml
 [dependencies]
-vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", rev = "<tested-commit>", features = ["gpu"] }
+vrp-gpu = { version = "0.1.1-alpha", features = ["gpu"] }
 ```
 
-Replace `<tested-commit>` with the exact Git commit you validated.
 `gpu::evaluate_two_opt_deltas` returns a row-major `n × n` matrix with computed
 `f32` deltas for valid `i < j` and positive infinity elsewhere. Extreme finite
 input distances can still yield non-finite arithmetic results.
