@@ -7,8 +7,11 @@ use cudarc::{
     nvrtc::Ptx,
 };
 
-use super::TwoOptMove;
-use crate::{instance::SolomonInstance, solution::Route};
+use super::{TwoOptMove, cpu};
+use crate::{
+    instance::SolomonInstance,
+    solution::{Route, Solution},
+};
 
 const KERNEL_PTX: &str = include_str!("../../kernel.ptx");
 const SMOKE_INPUT: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
@@ -19,13 +22,19 @@ const REDUCTION_THREADS: u32 = 256;
 #[path = "gpu_reduction_tests.rs"]
 mod reduction_tests;
 
-/// Input validation or CUDA execution failure during delta evaluation.
+#[cfg(test)]
+#[path = "gpu_search_tests.rs"]
+mod search_tests;
+
+/// Input validation, CUDA execution, or selected-move consistency failure.
 #[derive(Debug)]
 pub enum GpuEvaluationError {
     /// The instance or route violates the evaluator's input invariants.
     InvalidInput(&'static str),
     /// A matrix or launch dimension cannot be represented safely.
     SizeOverflow,
+    /// A selected move was invalid or did not reduce recomputed route cost.
+    InconsistentMove,
     /// The CUDA driver rejected an operation.
     Driver(DriverError),
 }
@@ -35,6 +44,12 @@ impl std::fmt::Display for GpuEvaluationError {
         match self {
             Self::InvalidInput(message) => write!(f, "invalid GPU input: {message}"),
             Self::SizeOverflow => write!(f, "input exceeds the kernel indexing or launch limits"),
+            Self::InconsistentMove => {
+                write!(
+                    f,
+                    "selected 2-opt move is invalid or does not reduce route cost"
+                )
+            }
             Self::Driver(error) => write!(f, "CUDA evaluation failed: {error}"),
         }
     }
@@ -55,6 +70,18 @@ impl From<DriverError> for GpuEvaluationError {
     }
 }
 
+/// Result of a completed GPU-selected 2-opt search.
+///
+/// Improvement is computed from complete route costs accumulated in `f64`
+/// from the instance's `f32` distance matrix, not from a sum of move deltas.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GpuSearchReport {
+    /// Number of reversals accepted by the host.
+    pub accepted_moves: usize,
+    /// Total decrease in recomputed route distance.
+    pub distance_improvement: f64,
+}
+
 fn output_size(route_len: usize) -> Result<u32, GpuEvaluationError> {
     route_len
         .checked_mul(route_len)
@@ -65,7 +92,7 @@ fn output_size(route_len: usize) -> Result<u32, GpuEvaluationError> {
 /// Runs the PTX smoke-test through the CUDA driver.
 ///
 /// This verifies the versioned PTX artifact can be loaded by `cudarc` and
-/// launched on the configured CUDA device before 2-opt orchestration is added.
+/// launched on the configured CUDA device.
 pub fn smoke_add_one() -> Result<Vec<f32>, DriverError> {
     let context = CudaContext::new(0)?;
     let stream = context.default_stream();
@@ -171,6 +198,114 @@ pub fn best_two_opt_move(
         launch_len,
     )?;
     Ok(reduce_device_deltas(&stream, deltas, route.len() as u32)?)
+}
+
+/// Runs GPU-selected best-improvement 2-opt until no improving move remains.
+///
+/// Each iteration uses [`best_two_opt_move`], which currently creates a CUDA
+/// context and transfers the matrix and route for every nontrivial call. The
+/// host applies each reversal and accepts it only if a complete `f64` cost
+/// recomputation strictly decreases. This is a route-local search, not a
+/// time-window-aware solver or a GPU speedup claim.
+///
+/// The input is validated before CUDA access. If validation, CUDA execution,
+/// or a selected-move consistency check fails at any iteration, `route` is
+/// unchanged. Empty and singleton routes return a zero report without CUDA.
+pub fn two_opt_route(
+    route: &mut Route,
+    instance: &SolomonInstance,
+) -> Result<GpuSearchReport, GpuEvaluationError> {
+    search_route_with(route, instance, &mut best_two_opt_move)
+}
+
+/// Runs GPU-selected 2-opt independently on every route in a solution.
+///
+/// Routes are validated individually; this does not check that the solution
+/// visits every customer or satisfies fleet and capacity constraints. Reversal
+/// preserves route membership and demand. The entire `solution` is unchanged
+/// if any route fails validation, CUDA execution, or move verification.
+pub fn two_opt(
+    solution: &mut Solution,
+    instance: &SolomonInstance,
+) -> Result<GpuSearchReport, GpuEvaluationError> {
+    search_solution_with(solution, instance, &mut best_two_opt_move)
+}
+
+fn route_cost_f64(route: &Route, instance: &SolomonInstance) -> f64 {
+    let mut previous = 0;
+    let mut cost = 0.0;
+    for &node in route.nodes.iter().chain(std::iter::once(&0)) {
+        cost += f64::from(instance.distance(previous, node));
+        previous = node;
+    }
+    cost
+}
+
+fn search_route_with<F>(
+    route: &mut Route,
+    instance: &SolomonInstance,
+    selector: &mut F,
+) -> Result<GpuSearchReport, GpuEvaluationError>
+where
+    F: FnMut(&Route, &SolomonInstance) -> Result<Option<TwoOptMove>, GpuEvaluationError>,
+{
+    prepare_route(route, instance)?;
+    let mut candidate = route.clone();
+    let initial_cost = route_cost_f64(&candidate, instance);
+    let mut current_cost = initial_cost;
+    let mut accepted_moves = 0usize;
+
+    while let Some(selected) = selector(&candidate, instance)? {
+        if selected.i >= selected.j
+            || selected.j >= candidate.len()
+            || !selected.delta.is_finite()
+            || selected.delta >= 0.0
+        {
+            return Err(GpuEvaluationError::InconsistentMove);
+        }
+        cpu::apply_two_opt(&mut candidate, selected.i, selected.j);
+        let next_cost = route_cost_f64(&candidate, instance);
+        if next_cost >= current_cost {
+            return Err(GpuEvaluationError::InconsistentMove);
+        }
+        current_cost = next_cost;
+        accepted_moves += 1;
+    }
+
+    *route = candidate;
+    Ok(GpuSearchReport {
+        accepted_moves,
+        distance_improvement: initial_cost - current_cost,
+    })
+}
+
+fn search_solution_with<F>(
+    solution: &mut Solution,
+    instance: &SolomonInstance,
+    selector: &mut F,
+) -> Result<GpuSearchReport, GpuEvaluationError>
+where
+    F: FnMut(&Route, &SolomonInstance) -> Result<Option<TwoOptMove>, GpuEvaluationError>,
+{
+    instance
+        .validate()
+        .map_err(GpuEvaluationError::InvalidInput)?;
+    for route in &solution.routes {
+        prepare_route(route, instance)?;
+    }
+
+    let mut candidate = solution.clone();
+    let mut report = GpuSearchReport {
+        accepted_moves: 0,
+        distance_improvement: 0.0,
+    };
+    for route in &mut candidate.routes {
+        let route_report = search_route_with(route, instance, selector)?;
+        report.accepted_moves += route_report.accepted_moves;
+        report.distance_improvement += route_report.distance_improvement;
+    }
+    *solution = candidate;
+    Ok(report)
 }
 
 // Inputs are a nonempty n² delta buffer, n > 0, and n² fits u32. Intermediate
