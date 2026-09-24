@@ -5,14 +5,14 @@
 
 VRP-GPU is an experimental Rust library for capacitated vehicle routing (CVRP).
 It parses Solomon-style instances, builds routes with a greedy nearest-neighbor
-heuristic, and provides CPU 2-opt local search. The published `gpu` feature
-evaluates CUDA 2-opt candidates and selects one improving move; the development
-branch also has host-orchestrated GPU-selected search. Neither is a GPU-only
-end-to-end solver. The CPU implementation is the correctness reference.
+heuristic, and provides CPU 2-opt local search. The optional `gpu` feature
+evaluates CUDA 2-opt candidates and supports host-orchestrated, GPU-selected
+search over routes and solutions. It is not a GPU-only end-to-end solver. The
+CPU implementation is the correctness reference.
 
-> **Published alpha:** [`vrp-gpu 0.1.1-alpha`](https://crates.io/crates/vrp-gpu/0.1.1-alpha).
+> **Published alpha:** [`vrp-gpu 0.2.0-alpha.1`](https://crates.io/crates/vrp-gpu/0.2.0-alpha.1).
 > Public APIs may change before the first stable release. See the
-> [API documentation](https://docs.rs/vrp-gpu/0.1.1-alpha/vrp_gpu/) for this
+> [API documentation](https://docs.rs/vrp-gpu/0.2.0-alpha.1/vrp_gpu/) for this
 > published version.
 
 ## Workspace
@@ -34,7 +34,7 @@ To use the published alpha, specify its prerelease version:
 
 ```toml
 [dependencies]
-vrp-gpu = "0.1.1-alpha"
+vrp-gpu = "0.2.0-alpha.1"
 ```
 
 To try changes that have not been published, pin a tested repository commit:
@@ -44,11 +44,12 @@ To try changes that have not been published, pin a tested repository commit:
 vrp-gpu = { git = "https://github.com/pedrozaz/vrp-gpu", rev = "<tested-commit>" }
 ```
 
-Enable CUDA candidate evaluation with the opt-in `gpu` feature:
+Enable CUDA candidate evaluation and GPU-selected search with the opt-in
+`gpu` feature:
 
 ```toml
 [dependencies]
-vrp-gpu = { version = "0.1.1-alpha", features = ["gpu"] }
+vrp-gpu = { version = "0.2.0-alpha.1", features = ["gpu"] }
 ```
 
 The default feature set is CPU-only. See the
@@ -56,10 +57,12 @@ The default feature set is CPU-only. See the
 public feature contract. The current internal CLI prints a placeholder message;
 use the library API for actual routing work.
 
-The CUDA API currently creates a context and transfers data for each nontrivial
-call. In the [recorded CPU/GPU validation](docs/benchmarks/2026-09-22-cpu-gpu.md),
-its end-to-end latency was higher than the CPU reference for every measured
-route with at least two customers. No GPU speedup is claimed for this alpha.
+Each nontrivial CUDA selection currently creates a context and transfers data;
+iterative search repeats that overhead. The
+[recorded CPU/GPU validation](docs/benchmarks/2026-09-22-cpu-gpu.md) measured
+the earlier single-move API, which was slower than the CPU reference for every
+measured route with at least two customers. Search-level performance has not
+been measured. No GPU speedup is claimed for this alpha.
 
 ## Compatibility
 
