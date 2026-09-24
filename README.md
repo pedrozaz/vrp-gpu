@@ -5,9 +5,10 @@
 
 VRP-GPU is an experimental Rust library for capacitated vehicle routing (CVRP).
 It parses Solomon-style instances, builds routes with a greedy nearest-neighbor
-heuristic, and provides CPU 2-opt local search. The optional `gpu` feature uses
-CUDA to evaluate 2-opt candidates and select one improving move; it is not a
-complete GPU solver. The CPU implementation is the correctness reference.
+heuristic, and provides CPU 2-opt local search. The published `gpu` feature
+evaluates CUDA 2-opt candidates and selects one improving move; the development
+branch also has host-orchestrated GPU-selected search. Neither is a GPU-only
+end-to-end solver. The CPU implementation is the correctness reference.
 
 > **Published alpha:** [`vrp-gpu 0.1.1-alpha`](https://crates.io/crates/vrp-gpu/0.1.1-alpha).
 > Public APIs may change before the first stable release. See the
