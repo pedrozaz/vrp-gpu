@@ -2,15 +2,14 @@
 
 `vrp-gpu` provides CVRP data structures, CPU reference heuristics and optional
 CUDA evaluation of 2-opt moves. It parses Solomon-style text, constructs routes
-with a greedy nearest-neighbor heuristic, and improves routes on the CPU.
-The published GPU API computes candidate deltas or selects a single move. The
-development branch also provides host-orchestrated GPU-selected 2-opt search
-for routes and solutions; this new API is not in the published `0.1.1-alpha`.
+with a greedy nearest-neighbor heuristic, and improves routes on the CPU. The
+GPU API computes candidate deltas, selects individual moves, or runs
+host-orchestrated GPU-selected 2-opt search for routes and solutions.
 
 The current alpha is
-[`0.1.1-alpha`](https://crates.io/crates/vrp-gpu/0.1.1-alpha).
+[`0.2.0-alpha.1`](https://crates.io/crates/vrp-gpu/0.2.0-alpha.1).
 The API may change before a stable release. See the
-[documentation for that version](https://docs.rs/vrp-gpu/0.1.1-alpha/vrp_gpu/).
+[documentation for that version](https://docs.rs/vrp-gpu/0.2.0-alpha.1/vrp_gpu/).
 
 ## Features
 
@@ -28,7 +27,7 @@ To use the published alpha, specify its prerelease version:
 
 ```toml
 [dependencies]
-vrp-gpu = "0.1.1-alpha"
+vrp-gpu = "0.2.0-alpha.1"
 ```
 
 For changes not yet published, pin a tested Git revision:
@@ -81,7 +80,7 @@ To use the optional GPU API in the published alpha, enable the feature:
 
 ```toml
 [dependencies]
-vrp-gpu = { version = "0.1.1-alpha", features = ["gpu"] }
+vrp-gpu = { version = "0.2.0-alpha.1", features = ["gpu"] }
 ```
 
 `gpu::evaluate_two_opt_deltas` returns a row-major `n × n` matrix with computed
@@ -94,9 +93,9 @@ invalid input, size overflow or CUDA driver failure. Empty and singleton routes
 return without creating a CUDA context. A returned move is only a proposal:
 apply it with `cpu::apply_two_opt` if your application accepts it.
 
-## Development-only GPU search API
+## GPU search API
 
-On the development branch, `gpu::two_opt_route` repeatedly selects and applies
+`gpu::two_opt_route` repeatedly selects and applies
 best-improvement moves to one route. `gpu::two_opt` does the same independently
 for each route in a solution. Both return `GpuSearchReport` with accepted move
 count and distance improvement computed by `f64` accumulation of the `f32`
@@ -105,7 +104,7 @@ validation, CUDA, or selected-move consistency error leaves the input
 unchanged. A solution search does not itself establish fleet, capacity, or
 customer-coverage feasibility; check `Solution::is_feasible` when needed.
 
-The following example uses the development-branch search API. It compiles
+The following example uses the search API. It compiles
 without running in rustdoc because execution requires a compatible NVIDIA GPU
 and driver:
 
@@ -179,8 +178,9 @@ each iteration; there is no reusable device session. The checked-in artifact
 targets `sm_120` and has been
 hardware-validated on an NVIDIA GeForce RTX 5060 Ti. Other devices have no
 compatibility claim. The [recorded validation](https://github.com/pedrozaz/vrp-gpu/blob/develop/docs/benchmarks/2026-09-22-cpu-gpu.md)
-found this end-to-end GPU API slower than the CPU reference for all measured
-nontrivial routes; no speedup is claimed. See the [input and algorithm guide](https://github.com/pedrozaz/vrp-gpu/blob/develop/docs/user-guide.md)
+found the single-move GPU API slower than the CPU reference for all measured
+nontrivial routes. Search-level latency has not been measured; no speedup is
+claimed. See the [input and algorithm guide](https://github.com/pedrozaz/vrp-gpu/blob/develop/docs/user-guide.md)
 for exact model and numerical contracts.
 
 ## Minimum supported Rust version
