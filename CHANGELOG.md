@@ -7,6 +7,17 @@ and published versions will follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0-alpha.1] - 2026-09-23
+
+This alpha adds host-orchestrated GPU-selected 2-opt search. The existing PTX
+and CUDA kernel ABI are unchanged; no search-level speedup is claimed.
+
+### Added
+
+- Host-orchestrated GPU-selected 2-opt search for one route or every route in a
+  solution. Accepted moves are checked against independently recomputed route
+  cost, and search errors leave the caller's data unchanged.
+
 ## [0.1.1-alpha] - 2026-09-22
 
 Documentation-only prerelease. No Rust API, algorithm, dependency, or PTX
@@ -43,6 +54,7 @@ and kernel compiler workspace are not published.
 - The supported input model is CVRP; Solomon time windows are parsed but not
   enforced by the current construction or local-search routines.
 
-[Unreleased]: https://github.com/pedrozaz/vrp-gpu/compare/v0.1.1-alpha...develop
+[Unreleased]: https://github.com/pedrozaz/vrp-gpu/compare/v0.2.0-alpha.1...develop
+[0.2.0-alpha.1]: https://github.com/pedrozaz/vrp-gpu/compare/v0.1.1-alpha...v0.2.0-alpha.1
 [0.1.1-alpha]: https://github.com/pedrozaz/vrp-gpu/compare/v0.1.0-alpha.1...v0.1.1-alpha
 [0.1.0-alpha.1]: https://github.com/pedrozaz/vrp-gpu/releases/tag/v0.1.0-alpha.1

@@ -38,6 +38,13 @@ segment and recomputing complete route cost. Keep tie ordering exact. Use a
 documented floating-point tolerance for cost comparisons; never use a
 tolerance to decide which candidate wins the deterministic reduction.
 
+Search-level tests also compare completed routes and solutions with the CPU
+reference, verify a two-move route, check full-cost improvement using `f64`
+accumulation, and exercise no-op, invalid-input and transactional error paths.
+These tests do not establish performance. The portable orchestration tests
+inject the CPU selector so they can run without a GPU; ignored tests execute
+the actual CUDA selector on supported hardware.
+
 `docs/2opt-gpu-reduction.md` records the current reduction ABI and optional
 Compute Sanitizer commands. A sanitizer pass is evidence for the tested
 configuration only. Record tool availability and exact command in the PR.

@@ -80,12 +80,15 @@ differ slightly from a freshly summed full route distance due to rounding.
 
 ## GPU evaluation
 
-The `gpu` Cargo feature exposes two useful entry points:
+The `gpu` Cargo feature exposes candidate evaluation and host-orchestrated
+search:
 
 | API | Result | Host transfer |
 | --- | --- | --- |
 | `gpu::evaluate_two_opt_deltas` | All `n²` route-position deltas, with invalid cells set to `+∞` | Downloads the full delta matrix. |
 | `gpu::best_two_opt_move` | One finite negative move or `None` | Reduces on the device; downloads one delta and one index. |
+| `gpu::two_opt_route` | Applies best-improvement until one route has no improving candidate; returns move count and `f64` distance improvement. | Repeats GPU selection for every iteration. |
+| `gpu::two_opt` | Applies that search independently to every route in a solution; returns aggregate move count and improvement. | Repeats GPU selection for every route and iteration. |
 
 Both APIs validate the full instance and route IDs before CUDA access. Empty
 and singleton routes take a CPU-only fast path. The GPU selector does not
@@ -94,10 +97,23 @@ Approximate floating-point equality is used only in parity tests, not when
 ordering candidates. A `None` result means no *finite negative delta was
 selected* under the supplied data; it is not a general optimality proof.
 
-The current GPU host implementation creates a context, loads the embedded PTX,
-allocates and transfers data for each nontrivial call. Plan capacity around an
-`n²` delta buffer plus temporary reduction buffers. GPU evaluation does not
-provide route convergence, batching across routes, or an integrated solver.
-The PTX targets `sm_120`; hardware verification has been performed on an RTX
-5060 Ti. See [architecture](architecture.md) and the
+The search APIs mutate only after a complete success. Before accepting each
+selected move, the host reverses a working copy and recomputes the full route
+distance with `f64` accumulation of the original `f32` matrix values. A move
+whose indices or delta violate the selection contract, or whose recomputed
+cost does not strictly decrease, returns `GpuEvaluationError::InconsistentMove`
+and leaves the input unchanged. Any validation or CUDA error does the same.
+Empty and singleton routes need no CUDA. `GpuSearchReport::distance_improvement`
+is the difference between recomputed initial and final costs, not a sum of
+reported `f32` deltas. Solution search validates routes individually, not
+whole-solution CVRP feasibility; callers should check `Solution::is_feasible`
+when they require it.
+
+The GPU host implementation creates a context, loads the embedded PTX,
+allocates and transfers data for each nontrivial selection. Thus, a search
+repeats this overhead at every iteration. Plan capacity around an `n²` delta
+buffer plus temporary reduction buffers. There is no persistent GPU session,
+cross-route batching, or GPU-only integrated solver, and no search-level
+performance result yet. The PTX targets `sm_120`; hardware verification has
+been performed on an RTX 5060 Ti. See [architecture](architecture.md) and the
 [reduction contract](2opt-gpu-reduction.md) before changing the kernel.
