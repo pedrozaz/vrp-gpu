@@ -69,9 +69,15 @@ allocation bounds, not measured speedup claims.
 
 The GPU host functions validate the instance and route, create a context,
 load the embedded module, transfer inputs, launch kernels and synchronize on
-each nontrivial call. There is no persistent context cache or GPU route
-convergence API. `best_two_opt_move` returns a proposal; applying it and
-repeating search remain the caller's responsibility.
+each nontrivial selection call. There is no persistent context cache.
+`best_two_opt_move` still returns a proposal without mutation. The
+`two_opt_route` and `two_opt` convenience APIs repeat that selection on the
+host, apply reversals, and verify each accepted move against a complete route
+cost accumulated in `f64` from the same matrix. They search one route or each
+route independently; they do not batch routes on the GPU or enforce time
+windows. Errors are transactional: the caller's route or solution is changed
+only after the whole search succeeds. Repeated context setup and transfers
+remain an unmeasured cost of the new search API, not a speedup claim.
 
 ## Public API boundary
 
