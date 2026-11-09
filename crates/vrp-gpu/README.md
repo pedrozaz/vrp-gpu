@@ -76,6 +76,16 @@ exhaustion only means this greedy construction failed. If instance data are
 constructed or changed through public fields, call `SolomonInstance::validate`
 before passing them to CPU routines.
 
+In the development revision, text parsing accepts up to 8 MiB of UTF-8 input
+and 4096 nodes including the depot, limiting the dense distance matrix to
+64 MiB. See `SolomonInstance::MAX_PARSE_BYTES` and
+`SolomonInstance::MAX_PARSE_NODES`. Exceeding either limit, overflowing the
+matrix size, or failing to reserve the matrix returns
+`SolomonParseError::InvalidInstance`. Bound file/request buffers before
+parsing as well; these limits apply per call and do not limit memory already
+allocated by the caller. Manually built instances and
+`compute_distance_matrix` do not impose the parser's node limit.
+
 To use the optional GPU API in the published alpha, enable the feature:
 
 ```toml

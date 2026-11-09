@@ -7,6 +7,15 @@ and published versions will follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Bound Solomon text parsing to 8 MiB of input and 4096 nodes including the
+  depot, limiting the dense distance matrix to 64 MiB. Oversized input and
+  matrix reservation failures return `SolomonParseError::InvalidInstance`.
+  Matrix-size arithmetic is checked, and only required input columns are
+  collected. The standalone distance-matrix helper retains its panicking API
+  and has no parser node limit.
+
 ## [0.2.0-alpha.1] - 2026-09-23
 
 This alpha adds host-orchestrated GPU-selected 2-opt search. The existing PTX

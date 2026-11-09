@@ -37,6 +37,21 @@ the Solomon-style layout exercised by this repository, not an arbitrary VRP
 file format. Parsing reports `SolomonParseError`; malformed input is not a
 normal reason to panic.
 
+At the current development revision, text parsing accepts at most **8 MiB**
+(`SolomonInstance::MAX_PARSE_BYTES`, measured in UTF-8 bytes) and **4096 nodes**
+(`SolomonInstance::MAX_PARSE_NODES`, including the depot). Inputs exactly at
+either limit are accepted if otherwise valid. Larger input returns
+`SolomonParseError::InvalidInstance` before building the distance matrix;
+the node limit caps that matrix at **64 MiB**. The parser checks matrix-size
+arithmetic and reports matrix reservation failures through the same error
+variant. It collects only the required columns, ignoring any extras.
+
+These are per-parse bounds, not a process-wide memory budget: the caller
+already owns the input string, and concurrent calls consume memory separately.
+Applications reading untrusted files or requests should also bound their input
+buffers before parsing. Manually built instances and the standalone
+`compute_distance_matrix` helper are not subject to the parser limits.
+
 `SolomonInstance` has public fields, so manually built or mutated values must
 be checked with `validate()` before use. The check requires:
 
@@ -51,6 +66,9 @@ be checked with `validate()` before use. The check requires:
 coordinate slices of `f32` values. It does not itself validate coordinates;
 call `validate()` on the completed instance. Matrix construction and instance
 validation each take O(N²) time and the matrix takes O(N²) memory for N nodes.
+The standalone helper panics on unequal slice lengths, matrix-size overflow
+or matrix reservation failure; use text parsing when those resource failures
+must be reported as `SolomonParseError`.
 
 ## Constructing and improving a solution
 

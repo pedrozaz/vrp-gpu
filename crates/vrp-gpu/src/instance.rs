@@ -14,6 +14,9 @@ pub struct VehicleConfig {
 
 /// A parsed Solomon CVRP instance with contiguous memory layouts (SoA)
 /// optimized for CPU caching and direct GPU device transfers.
+///
+/// Text parsing is bounded by [`Self::MAX_PARSE_BYTES`] and
+/// [`Self::MAX_PARSE_NODES`]. These limits do not apply to manually built instances.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SolomonInstance {
     /// Instance identifier / name (e.g., "C101").
@@ -40,6 +43,12 @@ pub struct SolomonInstance {
 }
 
 impl SolomonInstance {
+    /// Maximum text input size accepted by the parser: 8 MiB, measured in bytes.
+    pub const MAX_PARSE_BYTES: usize = 8 * 1024 * 1024;
+
+    /// Maximum parsed nodes, including the depot: 4096 (a 64 MiB distance matrix).
+    pub const MAX_PARSE_NODES: usize = 4096;
+
     /// Validates the public arrays and the symmetric CVRP cost model.
     ///
     /// Call this after constructing or mutating an instance manually. Validation
@@ -123,14 +132,34 @@ impl SolomonInstance {
 ///
 /// Returns a vector of size `n * n`, where `n = xs.len()`.
 /// Element at index `i * n + j` is `sqrt((xs[i] - xs[j])^2 + (ys[i] - ys[j])^2)`.
+/// Unlike text parsing, this helper does not impose a node limit.
+///
+/// # Panics
+///
+/// Panics if the slices have different lengths, the matrix size overflows, or
+/// the matrix cannot be reserved. Text parsing reports reservation errors as
+/// [`SolomonParseError::InvalidInstance`] instead.
 pub fn compute_distance_matrix(xs: &[f32], ys: &[f32]) -> Vec<f32> {
+    try_compute_distance_matrix(xs, ys).expect("could not allocate distance matrix")
+}
+
+fn reserve_distance_matrix(n: usize) -> Result<Vec<f32>, &'static str> {
+    let entries = n.checked_mul(n).ok_or("distance matrix size overflow")?;
+    let mut matrix = Vec::new();
+    matrix
+        .try_reserve_exact(entries)
+        .map_err(|_| "distance matrix allocation failed")?;
+    Ok(matrix)
+}
+
+fn try_compute_distance_matrix(xs: &[f32], ys: &[f32]) -> Result<Vec<f32>, &'static str> {
     assert_eq!(
         xs.len(),
         ys.len(),
         "X and Y coordinate slices must have identical length"
     );
     let n = xs.len();
-    let mut matrix = Vec::with_capacity(n * n);
+    let mut matrix = reserve_distance_matrix(n)?;
 
     for i in 0..n {
         let xi = xs[i];
@@ -146,7 +175,7 @@ pub fn compute_distance_matrix(xs: &[f32], ys: &[f32]) -> Vec<f32> {
         }
     }
 
-    matrix
+    Ok(matrix)
 }
 
 /// Errors that can occur during Solomon instance parsing.
@@ -160,7 +189,7 @@ pub enum SolomonParseError {
     InvalidCustomerRow(String),
     /// No customer/depot nodes found in the instance.
     NoNodesFound,
-    /// Parsed values do not form a valid symmetric CVRP instance.
+    /// Invalid CVRP values, parser resource limits, or matrix reservation failure.
     InvalidInstance(String),
 }
 
@@ -182,6 +211,13 @@ impl FromStr for SolomonInstance {
     type Err = SolomonParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() > Self::MAX_PARSE_BYTES {
+            return Err(SolomonParseError::InvalidInstance(format!(
+                "input byte limit exceeded (maximum {})",
+                Self::MAX_PARSE_BYTES
+            )));
+        }
+
         let mut name = None;
         let mut num_vehicles = None;
         let mut capacity = None;
@@ -227,7 +263,7 @@ impl FromStr for SolomonInstance {
                 if line.contains("NUMBER") || line.contains("CAPACITY") {
                     continue;
                 }
-                let tokens: Vec<&str> = line.split_whitespace().collect();
+                let tokens: Vec<&str> = line.split_whitespace().take(2).collect();
                 if tokens.len() >= 2 && num_vehicles.is_none() {
                     num_vehicles = Some(tokens[0].parse::<usize>().map_err(|e| {
                         SolomonParseError::InvalidVehicleSection(format!(
@@ -246,7 +282,14 @@ impl FromStr for SolomonInstance {
                     continue;
                 }
 
-                let tokens: Vec<&str> = line.split_whitespace().collect();
+                if xs.len() >= Self::MAX_PARSE_NODES {
+                    return Err(SolomonParseError::InvalidInstance(format!(
+                        "node limit exceeded (maximum {}, including depot)",
+                        Self::MAX_PARSE_NODES
+                    )));
+                }
+
+                let tokens: Vec<&str> = line.split_whitespace().take(7).collect();
                 if tokens.len() < 7 {
                     return Err(SolomonParseError::InvalidCustomerRow(format!(
                         "Expected 7 columns, found {}: '{}'",
@@ -305,7 +348,8 @@ impl FromStr for SolomonInstance {
             return Err(SolomonParseError::NoNodesFound);
         }
 
-        let distance_matrix = compute_distance_matrix(&xs, &ys);
+        let distance_matrix = try_compute_distance_matrix(&xs, &ys)
+            .map_err(|message| SolomonParseError::InvalidInstance(message.into()))?;
 
         let instance = Self {
             name,
@@ -332,6 +376,62 @@ impl FromStr for SolomonInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parser_limits_input_bytes() {
+        let mut input = "Tést\nVEHICLE\n1 10\nCUSTOMER\n0 0 0 0 0 100 0\n".to_string();
+        input.push_str(&" ".repeat(8 * 1024 * 1024 - input.len()));
+        let instance = input.parse::<SolomonInstance>().unwrap();
+        assert_eq!(instance.num_nodes, 1);
+        assert_eq!(instance.distance_matrix, vec![0.0]);
+        assert_eq!(instance.name, "Tést");
+
+        input.push(' ');
+        assert!(matches!(
+            input.parse::<SolomonInstance>(),
+            Err(SolomonParseError::InvalidInstance(message)) if message.contains("input byte limit")
+        ));
+    }
+
+    #[test]
+    fn test_parser_limits_nodes_including_depot() {
+        use std::fmt::Write;
+
+        let mut input = "Test\nVEHICLE\n1 10\nCUSTOMER\n".to_string();
+        for id in 0..4096 {
+            writeln!(input, "{id} {id} 0 0 0 100 0").unwrap();
+        }
+        let instance = input.parse::<SolomonInstance>().unwrap();
+        assert_eq!(instance.num_nodes, 4096);
+        assert_eq!(instance.distance_matrix.len(), 16_777_216);
+        assert_eq!(instance.distance(0, 4095), 4095.0);
+
+        input.push_str("4096 4096 0 0 0 100 0\n");
+        assert!(matches!(
+            input.parse::<SolomonInstance>(),
+            Err(SolomonParseError::InvalidInstance(message)) if message.contains("node limit")
+        ));
+    }
+
+    #[test]
+    fn test_matrix_reservation_rejects_capacity_overflow() {
+        assert!(reserve_distance_matrix(usize::MAX).is_err());
+        // Squaring fits usize, but the f32 buffer exceeds addressable memory.
+        let nodes = 1usize << (usize::BITS / 2 - 1);
+        assert!(reserve_distance_matrix(nodes).is_err());
+    }
+
+    #[test]
+    fn test_parser_ignores_extra_columns() {
+        let input = "Test\nVEHICLE\n1 10 ignored\nCUSTOMER\n\
+                     0 0 0 0 0 100 0 ignored columns\n\
+                     1 3 4 5 0 100 0 ignored columns\n";
+        let instance: SolomonInstance = input.parse().unwrap();
+        assert_eq!(instance.vehicle.capacity, 10.0);
+        assert_eq!(instance.num_nodes, 2);
+        assert_eq!(instance.demands, vec![0.0, 5.0]);
+        assert_eq!(instance.distance_matrix, vec![0.0, 5.0, 5.0, 0.0]);
+    }
 
     #[test]
     fn test_parser_rejects_invalid_ids_and_numeric_values() {
